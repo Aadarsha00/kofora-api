@@ -1,0 +1,14 @@
+[Unit]
+Description=Kofora Django Gunicorn Service
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/kofora/backend
+EnvironmentFile=/var/www/kofora/backend/.env
+ExecStart=/var/www/kofora/venv/bin/gunicorn -c gunicorn.conf.py kofora_backend.wsgi:application
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

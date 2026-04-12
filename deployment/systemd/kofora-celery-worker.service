@@ -1,0 +1,15 @@
+[Unit]
+Description=Kofora Celery Worker
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/kofora/backend
+EnvironmentFile=/var/www/kofora/backend/.env
+ExecStart=/var/www/kofora/venv/bin/celery -A kofora_backend worker --loglevel=info
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
