@@ -39,5 +39,25 @@ class OrderSerializer(serializers.ModelSerializer):
             "customer_notes",
             "staff_notes",
             "created_at",
+            "updated_at",
             "items",
         )
+
+
+class OrderStatusHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderStatusHistory
+        fields = (
+            "id",
+            "from_status",
+            "to_status",
+            "note",
+            "created_at",
+        )
+
+
+class OrderDetailSerializer(OrderSerializer):
+    status_history = OrderStatusHistorySerializer(many=True, read_only=True)
+
+    class Meta(OrderSerializer.Meta):
+        fields = OrderSerializer.Meta.fields + ("status_history",)

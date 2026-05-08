@@ -14,6 +14,18 @@ class StripeIntentRequestSerializer(serializers.Serializer):
     idempotency_key = serializers.CharField(max_length=120)
 
 
+class StripeCheckoutRequestSerializer(serializers.Serializer):
+    order_id = serializers.IntegerField()
+    idempotency_key = serializers.CharField(max_length=120)
+    success_url = serializers.URLField()
+    cancel_url = serializers.URLField()
+
+
+class StripeCheckoutConfirmRequestSerializer(serializers.Serializer):
+    order_id = serializers.IntegerField()
+    provider_payment_id = serializers.CharField(max_length=150)
+
+
 class PayPalOrderRequestSerializer(serializers.Serializer):
     order_id = serializers.IntegerField()
     idempotency_key = serializers.CharField(max_length=120)
@@ -24,6 +36,7 @@ class PayPalOrderRequestSerializer(serializers.Serializer):
 class PayPalCaptureRequestSerializer(serializers.Serializer):
     order_id = serializers.IntegerField()
     provider_payment_id = serializers.CharField(max_length=150)
+    payer_id = serializers.CharField(max_length=150)
 
 
 class RefundRequestSerializer(serializers.Serializer):

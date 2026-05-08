@@ -10,7 +10,7 @@ class ProductImageInline(admin.TabularInline):
 
 class ProductVariantInline(admin.TabularInline):
     model = ProductVariant
-    extra = 0
+    extra = 1
 
 
 @admin.register(Product)

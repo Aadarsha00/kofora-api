@@ -1,8 +1,11 @@
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.views import APIView
 
-from .models import Bundle, Product
-from .serializers import BundleSerializer, ProductSerializer
+from apps.core.responses import api_success
+
+from .models import Bundle, Product, ProductImage
+from .serializers import BundleSerializer, ProductImageUploadSerializer, ProductSerializer
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -19,3 +22,16 @@ class BundleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
     queryset = Bundle.objects.prefetch_related("items").all()
     filterset_fields = ("is_active", "product")
+
+
+class ProductImageUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ProductImageUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        image_obj = serializer.save()
+        return api_success(
+            "Product image uploaded successfully",
+            ProductImageUploadSerializer(image_obj).data,
+        )

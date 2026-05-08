@@ -3,6 +3,7 @@ from datetime import datetime
 from django.db import transaction
 
 from apps.cart.services.cart_service import calculate_cart_totals
+from apps.discounts.services.discount_service import attach_discount_claim_to_order, validate_cart_discount_claim
 
 from ..models import Order, OrderAddressSnapshot, OrderItem, OrderStatusHistory
 
@@ -13,6 +14,10 @@ def generate_order_number() -> str:
 
 @transaction.atomic
 def create_order_from_cart(cart, customer_notes: str = "") -> Order:
+    is_valid, reason = validate_cart_discount_claim(cart)
+    if not is_valid:
+        raise ValueError(reason)
+
     totals = calculate_cart_totals(cart)
     order = Order.objects.create(
         order_number=generate_order_number(),
@@ -88,5 +93,7 @@ def create_order_from_cart(cart, customer_notes: str = "") -> Order:
         to_status=Order.STATUS_AWAITING_PAYMENT,
         note="Order created from cart",
     )
+
+    attach_discount_claim_to_order(cart, order)
 
     return order

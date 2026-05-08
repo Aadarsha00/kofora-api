@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
 
@@ -51,9 +53,44 @@ class DiscountRule(TimeStampedModel):
 
 class DiscountUsage(TimeStampedModel):
     discount = models.ForeignKey(Discount, on_delete=models.CASCADE, related_name="usages")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="discount_usages")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="discount_usages", null=True, blank=True)
     coupon_code = models.ForeignKey(CouponCode, null=True, blank=True, on_delete=models.SET_NULL)
     order_id = models.CharField(max_length=50, blank=True)
+    email = models.EmailField(blank=True)  # Track email for first-order discounts without auth
 
     class Meta:
         db_table = "discount_usages"
+        # Prevent duplicate usage of first-order discount per email
+        unique_together = [("discount", "email")]
+
+
+class DiscountClaim(TimeStampedModel):
+    STATUS_CLAIMED = "claimed"
+    STATUS_APPLIED = "applied"
+    STATUS_REDEEMED = "redeemed"
+    STATUS_EXPIRED = "expired"
+
+    STATUS_CHOICES = (
+        (STATUS_CLAIMED, "Claimed"),
+        (STATUS_APPLIED, "Applied"),
+        (STATUS_REDEEMED, "Redeemed"),
+        (STATUS_EXPIRED, "Expired"),
+    )
+
+    discount = models.ForeignKey(Discount, on_delete=models.CASCADE, related_name="claims")
+    coupon_code = models.ForeignKey(CouponCode, null=True, blank=True, on_delete=models.SET_NULL, related_name="claims")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="discount_claims")
+    order = models.ForeignKey("orders.Order", null=True, blank=True, on_delete=models.SET_NULL, related_name="discount_claims")
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    email = models.EmailField(db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_CLAIMED)
+    expires_at = models.DateTimeField()
+    applied_at = models.DateTimeField(null=True, blank=True)
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "discount_claims"
+        indexes = [
+            models.Index(fields=["discount", "email", "status"]),
+            models.Index(fields=["token", "status"]),
+        ]

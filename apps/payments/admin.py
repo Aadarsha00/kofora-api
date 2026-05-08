@@ -7,7 +7,7 @@ from .models import PaymentTransaction, PaymentWebhookEvent, RefundTransaction
 class PaymentTransactionAdmin(admin.ModelAdmin):
     list_display = ("id", "order", "provider", "provider_payment_id", "amount", "currency", "status")
     list_filter = ("provider", "status", "currency")
-    search_fields = ("provider_payment_id", "order__order_number")
+    search_fields = ("provider_payment_id", "provider_reference_id", "order__order_number")
 
 
 @admin.register(RefundTransaction)

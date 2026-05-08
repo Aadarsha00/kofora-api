@@ -10,6 +10,8 @@ from .serializers import (
     PayPalOrderRequestSerializer,
     PaymentTransactionSerializer,
     RefundRequestSerializer,
+    StripeCheckoutConfirmRequestSerializer,
+    StripeCheckoutRequestSerializer,
     StripeIntentRequestSerializer,
 )
 from .services.provider_service import (
@@ -17,6 +19,8 @@ from .services.provider_service import (
     capture_paypal_order,
     create_paypal_order,
     create_refund,
+    confirm_stripe_checkout_session,
+    create_stripe_checkout_session,
     create_stripe_payment_intent,
     reconcile_paypal_event,
     reconcile_stripe_event,
@@ -53,6 +57,46 @@ class StripeCreateIntentView(APIView):
         return api_success("Stripe payment intent created", PaymentTransactionSerializer(txn).data)
 
 
+class StripeCreateCheckoutSessionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = StripeCheckoutRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order = Order.objects.filter(id=serializer.validated_data["order_id"], customer=request.user).first()
+        if not order:
+            return api_error("Order not found")
+        try:
+            txn = create_stripe_checkout_session(
+                order=order,
+                idempotency_key=serializer.validated_data["idempotency_key"],
+                success_url=serializer.validated_data["success_url"],
+                cancel_url=serializer.validated_data["cancel_url"],
+            )
+        except PaymentProviderError as exc:
+            return api_error(str(exc))
+        return api_success("Stripe checkout session created", PaymentTransactionSerializer(txn).data)
+
+
+class StripeConfirmCheckoutSessionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = StripeCheckoutConfirmRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order = Order.objects.filter(id=serializer.validated_data["order_id"], customer=request.user).first()
+        if not order:
+            return api_error("Order not found")
+        try:
+            txn = confirm_stripe_checkout_session(
+                order=order,
+                provider_payment_id=serializer.validated_data["provider_payment_id"],
+            )
+        except PaymentProviderError as exc:
+            return api_error(str(exc))
+        return api_success("Stripe checkout session confirmed", PaymentTransactionSerializer(txn).data)
+
+
 class PayPalCreateOrderView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -84,7 +128,11 @@ class PayPalCaptureOrderView(APIView):
         if not order:
             return api_error("Order not found")
         try:
-            txn = capture_paypal_order(order, serializer.validated_data["provider_payment_id"])
+            txn = capture_paypal_order(
+                order,
+                serializer.validated_data["provider_payment_id"],
+                serializer.validated_data["payer_id"],
+            )
         except PaymentProviderError as exc:
             return api_error(str(exc))
         return api_success("PayPal order captured", PaymentTransactionSerializer(txn).data)

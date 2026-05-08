@@ -19,6 +19,8 @@ class PaymentTransaction(TimeStampedModel):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="payment_transactions")
     provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES)
     provider_payment_id = models.CharField(max_length=150, unique=True)
+    provider_reference_id = models.CharField(max_length=150, blank=True)
+    checkout_url = models.URLField(max_length=500, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)

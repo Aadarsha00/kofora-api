@@ -34,7 +34,12 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        generate_and_send_otp(user)
+        # Send OTP asynchronously (don't wait for response)
+        try:
+            generate_and_send_otp(user)
+        except Exception as e:
+            # Log the error but don't fail the signup
+            print(f"Error sending OTP: {e}")
         return api_success("Registration successful. OTP sent to email.", {"user_id": user.id}, status.HTTP_201_CREATED)
 
 

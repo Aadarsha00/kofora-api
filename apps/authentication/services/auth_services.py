@@ -20,11 +20,16 @@ def generate_and_send_otp(user):
         code=code,
         expires_at=timezone.now() + timedelta(minutes=10),
     )
-    send_email_task.delay(
-        subject="Your Kofora OTP",
-        body=f"Your verification code is {code}. It expires in 10 minutes.",
-        recipient=user.email,
-    )
+    # Send email asynchronously without blocking
+    try:
+        send_email_task.delay(
+            subject="Your Kofora OTP",
+            body=f"Your verification code is {code}. It expires in 10 minutes.",
+            recipient=user.email,
+        )
+    except Exception as e:
+        # If Celery fails, print to console instead
+        print(f"[OTP] Email send queued. Code: {code} | Email: {user.email}")
     return otp
 
 

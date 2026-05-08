@@ -5,6 +5,8 @@ from .views import (
     PayPalCreateOrderView,
     PayPalWebhookView,
     PaymentTransactionListView,
+    StripeCreateCheckoutSessionView,
+    StripeConfirmCheckoutSessionView,
     RefundCreateView,
     StripeCreateIntentView,
     StripeWebhookView,
@@ -13,6 +15,8 @@ from .views import (
 urlpatterns = [
     path("transactions/", PaymentTransactionListView.as_view(), name="payments-transactions"),
     path("stripe/intents/", StripeCreateIntentView.as_view(), name="payments-stripe-intents"),
+    path("stripe/checkout-sessions/", StripeCreateCheckoutSessionView.as_view(), name="payments-stripe-checkout-sessions"),
+    path("stripe/checkout-sessions/confirm/", StripeConfirmCheckoutSessionView.as_view(), name="payments-stripe-checkout-sessions-confirm"),
     path("paypal/orders/", PayPalCreateOrderView.as_view(), name="payments-paypal-orders"),
     path("paypal/capture/", PayPalCaptureOrderView.as_view(), name="payments-paypal-capture"),
     path("refunds/", RefundCreateView.as_view(), name="payments-refunds"),

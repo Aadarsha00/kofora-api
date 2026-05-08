@@ -35,6 +35,13 @@ class Product(UserAuditModel):
 
 class ProductImage(UserAuditModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
+    variant = models.ForeignKey(
+        "ProductVariant",
+        on_delete=models.SET_NULL,
+        related_name="images",
+        null=True,
+        blank=True,
+    )
     image = models.ImageField(upload_to="products/gallery/")
     alt_text = models.CharField(max_length=255, blank=True)
     sort_order = models.PositiveIntegerField(default=0)
@@ -66,6 +73,8 @@ class ProductVariant(UserAuditModel):
         db_table = "product_variants"
         indexes = [models.Index(fields=["product", "is_active"]), models.Index(fields=["size", "color"]), models.Index(fields=["price"])]
 
+    def __str__(self):
+        return f"{self.product.name} - {self.title} ({self.color})"
     @property
     def available_quantity(self):
         available = self.stock_quantity - self.reserved_quantity

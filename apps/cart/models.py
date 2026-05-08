@@ -3,7 +3,7 @@ from django.db import models
 
 from apps.addresses.models import Address
 from apps.core.models import TimeStampedModel
-from apps.discounts.models import CouponCode
+from apps.discounts.models import CouponCode, DiscountClaim
 from apps.products.models import Bundle, ProductVariant
 from apps.shipping.models import ShippingMethod
 
@@ -15,6 +15,7 @@ class Cart(TimeStampedModel):
     billing_address = models.ForeignKey(Address, null=True, blank=True, on_delete=models.SET_NULL, related_name="cart_billing")
     shipping_method = models.ForeignKey(ShippingMethod, null=True, blank=True, on_delete=models.SET_NULL)
     applied_coupon = models.ForeignKey(CouponCode, null=True, blank=True, on_delete=models.SET_NULL)
+    applied_discount_claim = models.ForeignKey(DiscountClaim, null=True, blank=True, on_delete=models.SET_NULL)
     is_abandoned = models.BooleanField(default=False)
     abandoned_at = models.DateTimeField(null=True, blank=True)
 

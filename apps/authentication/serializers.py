@@ -7,6 +7,8 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from apps.users.serializers import UserSerializer
+
 from .models import EmailOTP, PasswordResetToken
 
 User = get_user_model()
@@ -37,6 +39,11 @@ class LoginSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token["role"] = user.role
         return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        data["user"] = UserSerializer(self.user).data
+        return data
 
 
 class OTPRequestSerializer(serializers.Serializer):

@@ -1,0 +1,886 @@
+{
+  "info": {
+    "_postman_id": "f08d7cb8-0c84-4ab1-b34d-14f9f5a00b11",
+    "name": "Kofora API v1",
+    "description": "Comprehensive Kofora ecommerce API collection with role-based auth, token automation, query mapping, and image upload/image_url ingestion examples.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const refreshPath = '/api/v1/auth/token/refresh/';",
+          "const hasAuth = pm.request.auth && pm.request.auth.type === 'bearer';",
+          "const currentUrl = pm.request.url.toString();",
+          "if (!hasAuth || currentUrl.includes('/api/v1/auth/login/') || currentUrl.includes('/api/v1/auth/register/') || currentUrl.includes(refreshPath)) {",
+          "  return;",
+          "}",
+          "const refreshToken = pm.environment.get('refresh_token');",
+          "const expiry = Number(pm.environment.get('token_expiry_epoch') || '0');",
+          "const now = Math.floor(Date.now() / 1000);",
+          "if (!refreshToken) {",
+          "  return;",
+          "}",
+          "if (expiry - now > 60) {",
+          "  return;",
+          "}",
+          "pm.sendRequest({",
+          "  url: pm.environment.get('baseUrl') + refreshPath,",
+          "  method: 'POST',",
+          "  header: {'Content-Type': 'application/json'},",
+          "  body: { mode: 'raw', raw: JSON.stringify({ refresh: refreshToken }) }",
+          "}, function (err, res) {",
+          "  if (err || !res) return;",
+          "  const json = res.json();",
+          "  const data = json.data || json;",
+          "  if (data.access) {",
+          "    pm.environment.set('access_token', data.access);",
+          "    pm.environment.set('token_expiry_epoch', (Math.floor(Date.now()/1000) + 14 * 60).toString());",
+          "  }",
+          "  if (data.refresh) {",
+          "    pm.environment.set('refresh_token', data.refresh);",
+          "  }",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Auth and Role Sessions",
+      "item": [
+        {
+          "name": "Register Customer",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customer_email}}\",\n  \"username\": \"{{customer_username}}\",\n  \"password\": \"{{customer_password}}\",\n  \"first_name\": \"Customer\",\n  \"last_name\": \"One\",\n  \"phone\": \"+15550001001\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/register/",
+            "description": "Required: email, username, password. Optional: first_name, last_name, phone"
+          }
+        },
+        {
+          "name": "Register Staff",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staff_email}}\",\n  \"username\": \"{{staff_username}}\",\n  \"password\": \"{{staff_password}}\",\n  \"first_name\": \"Staff\",\n  \"last_name\": \"One\",\n  \"phone\": \"+15550001002\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/register/"
+          }
+        },
+        {
+          "name": "Register Admin",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"username\": \"{{admin_username}}\",\n  \"password\": \"{{admin_password}}\",\n  \"first_name\": \"Admin\",\n  \"last_name\": \"One\",\n  \"phone\": \"+15550001003\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/register/"
+          }
+        },
+        {
+          "name": "Login Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const data = json.data || json;",
+                  "if (data.access) pm.environment.set('access_token', data.access);",
+                  "if (data.refresh) pm.environment.set('refresh_token', data.refresh);",
+                  "pm.environment.set('token_expiry_epoch', (Math.floor(Date.now()/1000) + 14*60).toString());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customer_email}}\",\n  \"password\": \"{{customer_password}}\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/login/"
+          }
+        },
+        {
+          "name": "Login Staff",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staff_email}}\",\n  \"password\": \"{{staff_password}}\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/login/"
+          }
+        },
+        {
+          "name": "Login Admin",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/login/"
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/token/refresh/"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/logout/"
+          }
+        },
+        {
+          "name": "Send OTP",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customer_email}}\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/otp/send/"
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customer_email}}\",\n  \"code\": \"{{otp_code}}\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/otp/verify/"
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customer_email}}\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/forgot-password/"
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{password_reset_token}}\",\n  \"new_password\": \"StrongPass123!\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/reset-password/"
+          }
+        },
+        {
+          "name": "Google Login",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{google_auth_code}}\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/auth/google/login/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 User Profile",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/users/me/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Addresses",
+      "item": [
+        {
+          "name": "List Addresses",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/addresses/"
+          }
+        },
+        {
+          "name": "Create Address",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Jane Buyer\",\n  \"phone\": \"+15554443333\",\n  \"company\": \"\",\n  \"country\": \"US\",\n  \"state_province\": \"CA\",\n  \"city\": \"San Francisco\",\n  \"postal_code\": \"94105\",\n  \"address_line_1\": \"123 Market St\",\n  \"address_line_2\": \"Apt 5\",\n  \"address_type\": \"home\",\n  \"is_default_shipping\": true,\n  \"is_default_billing\": true,\n  \"is_active\": true\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/addresses/"
+          }
+        },
+        {
+          "name": "Retrieve Address",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/addresses/{{address_id}}/"
+          }
+        },
+        {
+          "name": "Update Address",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"city\": \"Los Angeles\",\n  \"postal_code\": \"90001\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/addresses/{{address_id}}/"
+          }
+        },
+        {
+          "name": "Delete Address",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}{{apiPrefix}}/addresses/{{address_id}}/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Categories, Products, Bundles",
+      "item": [
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/categories/"
+          }
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Crew Socks\",\n  \"slug\": \"crew-socks\",\n  \"description\": \"Premium crew socks\",\n  \"parent\": null,\n  \"is_active\": true,\n  \"sort_order\": 1,\n  \"seo_title\": \"Crew Socks\",\n  \"seo_description\": \"Best crew socks\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/categories/"
+          }
+        },
+        {
+          "name": "List Products",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/products/?is_active=true&is_published=true&search=kofora&ordering=-created_at",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "products", ""],
+              "query": [
+                { "key": "is_active", "value": "true" },
+                { "key": "is_published", "value": "true" },
+                { "key": "search", "value": "kofora" },
+                { "key": "ordering", "value": "-created_at" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Kofora Premium Crew\",\n  \"slug\": \"kofora-premium-crew\",\n  \"brand\": \"Kofora\",\n  \"short_description\": \"Soft all-day socks\",\n  \"full_description\": \"Long-form product description\",\n  \"is_active\": true,\n  \"is_featured\": true,\n  \"base_currency\": \"USD\",\n  \"is_published\": true,\n  \"seo_title\": \"Kofora Premium Crew\",\n  \"seo_description\": \"Premium cotton socks\",\n  \"categories\": [{{category_id}}]\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/products/"
+          }
+        },
+        {
+          "name": "Retrieve Product",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/products/{{product_id}}/"
+          }
+        },
+        {
+          "name": "Product Image Upload (file)",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "product", "value": "{{product_id}}", "type": "text" },
+                { "key": "image", "type": "file", "src": "" },
+                { "key": "alt_text", "value": "front shot", "type": "text" },
+                { "key": "sort_order", "value": "1", "type": "text" },
+                { "key": "is_active", "value": "true", "type": "text" }
+              ]
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/products/images/upload/"
+          }
+        },
+        {
+          "name": "Product Image Upload (image_url)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product\": {{product_id}},\n  \"image_url\": \"{{image_url}}\",\n  \"alt_text\": \"remote imported image\",\n  \"sort_order\": 2,\n  \"is_active\": true\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/products/images/upload/"
+          }
+        },
+        {
+          "name": "List Bundles",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/products/bundles/"
+          }
+        },
+        {
+          "name": "Create Bundle",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product\": {{product_id}},\n  \"name\": \"3 Pack Bundle\",\n  \"slug\": \"3-pack-bundle\",\n  \"bundle_price\": \"49.99\",\n  \"compare_at_price\": \"59.99\",\n  \"is_active\": true\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/products/bundles/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Attributes and Inventory",
+      "item": [
+        {
+          "name": "List Attributes",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/attributes/"
+          }
+        },
+        {
+          "name": "Create Attribute",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"material\",\n  \"name\": \"Material\",\n  \"is_active\": true\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/attributes/"
+          }
+        },
+        {
+          "name": "Inventory Adjustments List",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/inventory/adjustments/?reason=order&variant={{variant_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "inventory", "adjustments", ""],
+              "query": [
+                { "key": "reason", "value": "order" },
+                { "key": "variant", "value": "{{variant_id}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Cart and Orders",
+      "item": [
+        {
+          "name": "Get My Cart",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/cart/me/"
+          }
+        },
+        {
+          "name": "Create Order From Cart",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_notes\": \"Please pack carefully\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/orders/create-from-cart/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json(); if (json.data && json.data.id) pm.environment.set('order_id', String(json.data.id));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 Payments",
+      "item": [
+        {
+          "name": "List My Transactions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/payments/transactions/"
+          }
+        },
+        {
+          "name": "Create Stripe Intent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": {{order_id}},\n  \"idempotency_key\": \"stripe-order-{{order_id}}-v1\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/payments/stripe/intents/"
+          }
+        },
+        {
+          "name": "Create PayPal Order",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": {{order_id}},\n  \"idempotency_key\": \"paypal-order-{{order_id}}-v1\",\n  \"return_url\": \"https://kofora.com/payment/success\",\n  \"cancel_url\": \"https://kofora.com/payment/cancel\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/payments/paypal/orders/"
+          }
+        },
+        {
+          "name": "Capture PayPal",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": {{order_id}},\n  \"provider_payment_id\": \"PAYPAL_PROVIDER_ID\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/payments/paypal/capture/"
+          }
+        },
+        {
+          "name": "Create Refund",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_transaction_id\": {{payment_transaction_id}},\n  \"amount\": \"5.00\",\n  \"reason\": \"Customer request\",\n  \"idempotency_key\": \"refund-{{payment_transaction_id}}-v1\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/payments/refunds/"
+          }
+        },
+        {
+          "name": "Stripe Webhook (manual simulation)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Stripe-Signature", "value": "t=1,v1=test" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_test_123\",\n  \"type\": \"payment_intent.succeeded\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"pi_test_123\"\n    }\n  }\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/payments/webhooks/stripe/"
+          }
+        },
+        {
+          "name": "PayPal Webhook (manual simulation)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "PayPal-Transmission-Sig", "value": "test-signature" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"WH-123\",\n  \"event_type\": \"PAYMENT.CAPTURE.COMPLETED\",\n  \"resource\": {\n    \"id\": \"PAYPAL_PROVIDER_ID\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/payments/webhooks/paypal/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Discounts",
+      "item": [
+        {
+          "name": "List Discounts",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/discounts/"
+          }
+        },
+        {
+          "name": "Create Discount",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"SAVE10\",\n  \"discount_type\": \"percent\",\n  \"flat_amount\": null,\n  \"percentage\": \"10.00\",\n  \"usage_limit\": 1000,\n  \"per_user_limit\": 2,\n  \"starts_at\": null,\n  \"expires_at\": null,\n  \"minimum_order_amount\": \"50.00\",\n  \"first_order_only\": false,\n  \"is_auto_applied\": false,\n  \"is_stackable\": false,\n  \"is_active\": true\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/discounts/"
+          }
+        },
+        {
+          "name": "List Coupons",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/discounts/coupons/"
+          }
+        },
+        {
+          "name": "Create Coupon",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"discount\": {{discount_id}},\n  \"code\": \"SAVE10\",\n  \"is_active\": true\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/discounts/coupons/"
+          }
+        },
+        {
+          "name": "Validate Coupon",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SAVE10\",\n  \"subtotal\": \"150.00\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/discounts/coupons/validate/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Shipping, Subscriptions, Reviews, Analytics, Search",
+      "item": [
+        {
+          "name": "List Shipping Zones",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/shipping/zones/"
+          }
+        },
+        {
+          "name": "Create Shipping Zone",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"United States\",\n  \"country_code\": \"US\",\n  \"state_code\": \"\",\n  \"is_active\": true\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/shipping/zones/"
+          }
+        },
+        {
+          "name": "List Shipping Methods",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/shipping/methods/"
+          }
+        },
+        {
+          "name": "Create Shipping Method",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zone\": {{shipping_zone_id}},\n  \"name\": \"Standard US\",\n  \"code\": \"standard-us\",\n  \"base_rate\": \"6.99\",\n  \"free_shipping_threshold\": \"75.00\",\n  \"is_active\": true\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/shipping/methods/"
+          }
+        },
+        {
+          "name": "List Subscription Plans",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/subscriptions/plans/"
+          }
+        },
+        {
+          "name": "List My Subscriptions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/subscriptions/mine/"
+          }
+        },
+        {
+          "name": "List Reviews",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/reviews/"
+          }
+        },
+        {
+          "name": "Create Review",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product\": {{product_id}},\n  \"rating\": 5,\n  \"title\": \"Great quality\",\n  \"body\": \"Very comfortable and durable\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/reviews/"
+          }
+        },
+        {
+          "name": "Review Image Upload (file)",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "review", "value": "{{review_id}}", "type": "text" },
+                { "key": "image", "type": "file", "src": "" },
+                { "key": "alt_text", "value": "usage photo", "type": "text" }
+              ]
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/reviews/images/upload/"
+          }
+        },
+        {
+          "name": "Review Image Upload (image_url)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"review\": {{review_id}},\n  \"image_url\": \"{{image_url}}\",\n  \"alt_text\": \"remote review image\"\n}"
+            },
+            "url": "{{baseUrl}}{{apiPrefix}}/reviews/images/upload/"
+          }
+        },
+        {
+          "name": "Revenue Summary",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}{{apiPrefix}}/analytics/revenue-summary/"
+          }
+        },
+        {
+          "name": "Search Products Full Query",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/search/products/?q=crew&category=crew-socks&size=M&color=Black&min_price=10&max_price=100&ordering=rating",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "search", "products", ""],
+              "query": [
+                { "key": "q", "value": "crew" },
+                { "key": "category", "value": "crew-socks" },
+                { "key": "size", "value": "M" },
+                { "key": "color", "value": "Black" },
+                { "key": "min_price", "value": "10" },
+                { "key": "max_price", "value": "100" },
+                { "key": "ordering", "value": "rating" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Role Quick Runs",
+      "item": [
+        {
+          "name": "Customer Quick Run",
+          "item": [
+            {
+              "name": "Login as Customer",
+              "request": {
+                "auth": { "type": "noauth" },
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{customer_email}}\",\n  \"password\": \"{{customer_password}}\"\n}"
+                },
+                "url": "{{baseUrl}}{{apiPrefix}}/auth/login/"
+              }
+            },
+            {
+              "name": "Customer: My Cart",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}{{apiPrefix}}/cart/me/"
+              }
+            },
+            {
+              "name": "Customer: My Payments",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}{{apiPrefix}}/payments/transactions/"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff Quick Run",
+          "item": [
+            {
+              "name": "Login as Staff",
+              "request": {
+                "auth": { "type": "noauth" },
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{staff_email}}\",\n  \"password\": \"{{staff_password}}\"\n}"
+                },
+                "url": "{{baseUrl}}{{apiPrefix}}/auth/login/"
+              }
+            },
+            {
+              "name": "Staff: Discounts List",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}{{apiPrefix}}/discounts/"
+              }
+            },
+            {
+              "name": "Staff: Inventory Adjustments",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}{{apiPrefix}}/inventory/adjustments/"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Quick Run",
+          "item": [
+            {
+              "name": "Login as Admin",
+              "request": {
+                "auth": { "type": "noauth" },
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+                },
+                "url": "{{baseUrl}}{{apiPrefix}}/auth/login/"
+              }
+            },
+            {
+              "name": "Admin: Create Category",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Admin Category\",\n  \"slug\": \"admin-category\",\n  \"description\": \"Created in admin role run\",\n  \"is_active\": true,\n  \"sort_order\": 10\n}"
+                },
+                "url": "{{baseUrl}}{{apiPrefix}}/categories/"
+              }
+            },
+            {
+              "name": "Admin: Revenue Summary",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}{{apiPrefix}}/analytics/revenue-summary/"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
