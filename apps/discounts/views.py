@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from decimal import Decimal, InvalidOperation
 
+from apps.core.permissions import ReadOnlyOrAdminStaff
 from apps.core.responses import api_error, api_success
 
 from .models import CouponCode, Discount
@@ -18,17 +19,25 @@ from apps.cart.serializers import CartSerializer
 
 
 class DiscountViewSet(viewsets.ModelViewSet):
-    queryset = Discount.objects.all()
+    permission_classes = [ReadOnlyOrAdminStaff]
+    queryset = Discount.objects.all().order_by("-created_at")
     serializer_class = DiscountSerializer
     filterset_fields = ("is_active", "discount_type", "is_auto_applied")
+    search_fields = ("name",)
+    ordering_fields = ("created_at", "name")
 
 
 class CouponCodeViewSet(viewsets.ModelViewSet):
+    permission_classes = [ReadOnlyOrAdminStaff]
     serializer_class = CouponCodeSerializer
-    filterset_fields = ("is_active",)
+    filterset_fields = ("is_active", "discount")
 
     def get_queryset(self):
-        return CouponCode.objects.select_related("discount").exclude(discount__first_order_only=True)
+        return (
+            CouponCode.objects.select_related("discount")
+            .exclude(discount__first_order_only=True)
+            .order_by("-created_at")
+        )
 
 
 class CouponValidateView(APIView):

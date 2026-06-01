@@ -10,6 +10,8 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
     product_id = serializers.IntegerField(read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_slug = serializers.SlugField(source="product.slug", read_only=True)
+    image = serializers.SerializerMethodField()
+    image_alt_text = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductVariant
@@ -26,7 +28,28 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
             "stock_quantity",
             "available_quantity",
             "image_override",
+            "image",
+            "image_alt_text",
         )
+
+    def _selected_image(self, obj):
+        variant_image = obj.images.filter(is_active=True).order_by("sort_order", "id").first()
+        if variant_image:
+            return variant_image
+        return obj.product.images.filter(is_active=True, variant__isnull=True).order_by("sort_order", "id").first()
+
+    def get_image(self, obj):
+        if obj.image_override:
+            return obj.image_override.url
+
+        image = self._selected_image(obj)
+        return image.image.url if image else None
+
+    def get_image_alt_text(self, obj):
+        image = self._selected_image(obj)
+        if image and image.alt_text:
+            return image.alt_text
+        return obj.title or obj.product.name
 
 
 class CartVariantItemSerializer(serializers.ModelSerializer):

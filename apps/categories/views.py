@@ -1,13 +1,13 @@
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
 
+from apps.core.permissions import ReadOnlyOrAdminStaff
 from .models import Category
 from .serializers import CategorySerializer
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [ReadOnlyOrAdminStaff]
     lookup_field = "slug"
     filterset_fields = ("is_active", "parent")
     search_fields = ("name", "description")

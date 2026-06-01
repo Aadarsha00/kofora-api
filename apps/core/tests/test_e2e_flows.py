@@ -1,20 +1,34 @@
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.addresses.models import Address
+from apps.authentication.models import GoogleOAuthAccount
 from apps.cart.models import Cart, CartVariantItem
 from apps.categories.models import Category
 from apps.discounts.models import CouponCode, Discount
 from apps.orders.models import Order
 from apps.payments.models import PaymentTransaction
-from apps.products.models import Product, ProductVariant
+from apps.products.models import Product, ProductImage, ProductVariant
 from apps.shipping.models import ShippingMethod, ShippingZone
 
 User = get_user_model()
+
+
+TINY_GIF = (
+    b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
+    b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01"
+    b"\x00\x00\x02\x02D\x01\x00;"
+)
+
+
+def tiny_image(name="product.gif"):
+    return SimpleUploadedFile(name, TINY_GIF, content_type="image/gif")
 
 
 class E2EAuthFlowTests(APITestCase):
@@ -40,6 +54,53 @@ class E2EAuthFlowTests(APITestCase):
         self.assertEqual(login_res.data["user"]["email"], "customer1@example.com")
         self.assertEqual(login_res.data["user"]["role"], "customer")
 
+    @override_settings(GOOGLE_CLIENT_ID="test-google-client-id.apps.googleusercontent.com")
+    @patch("apps.authentication.views.requests.get")
+    def test_google_login_creates_user_and_returns_jwt_tokens(self, mock_google_tokeninfo):
+        mock_google_tokeninfo.return_value.status_code = status.HTTP_200_OK
+        mock_google_tokeninfo.return_value.json.return_value = {
+            "aud": "test-google-client-id.apps.googleusercontent.com",
+            "sub": "google-sub-123",
+            "email": "google-customer@example.com",
+            "email_verified": "true",
+            "given_name": "Google",
+            "family_name": "Customer",
+        }
+
+        google_res = self.client.post(
+            "/api/v1/auth/google/login/",
+            {"credential": "test-google-id-token"},
+            format="json",
+        )
+
+        self.assertEqual(google_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(google_res.data["success"])
+        self.assertIn("access", google_res.data["data"])
+        self.assertIn("refresh", google_res.data["data"])
+        self.assertEqual(google_res.data["data"]["user"]["email"], "google-customer@example.com")
+        self.assertTrue(User.objects.get(email="google-customer@example.com").is_email_verified)
+        self.assertTrue(GoogleOAuthAccount.objects.filter(google_sub="google-sub-123").exists())
+
+    @override_settings(GOOGLE_CLIENT_ID="test-google-client-id.apps.googleusercontent.com")
+    @patch("apps.authentication.views.requests.get")
+    def test_google_login_rejects_wrong_client_audience(self, mock_google_tokeninfo):
+        mock_google_tokeninfo.return_value.status_code = status.HTTP_200_OK
+        mock_google_tokeninfo.return_value.json.return_value = {
+            "aud": "other-client.apps.googleusercontent.com",
+            "sub": "google-sub-123",
+            "email": "google-customer@example.com",
+            "email_verified": "true",
+        }
+
+        google_res = self.client.post(
+            "/api/v1/auth/google/login/",
+            {"credential": "test-google-id-token"},
+            format="json",
+        )
+
+        self.assertEqual(google_res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(google_res.data["success"])
+
 
 class E2ECheckoutLifecycleTests(APITestCase):
     def setUp(self):
@@ -48,6 +109,13 @@ class E2ECheckoutLifecycleTests(APITestCase):
             username="buyer",
             password="StrongPass123!",
             role="customer",
+        )
+        self.admin_user = User.objects.create_user(
+            email="admin-buyer@example.com",
+            username="admin-buyer",
+            password="StrongPass123!",
+            role="admin",
+            is_staff=True,
         )
         self.client.force_authenticate(user=self.user)
 
@@ -177,6 +245,19 @@ class E2ECheckoutLifecycleTests(APITestCase):
         self.assertEqual(order.items.first().line_total, Decimal("39.98"))
 
     def test_cart_endpoints_match_frontend_contract(self):
+        ProductImage.objects.create(
+            product=self.product,
+            variant=self.variant,
+            image=tiny_image("cart-variant.gif"),
+            alt_text="Black crew sock",
+        )
+
+        cart_res = self.client.get("/api/v1/cart/me/", format="json")
+        self.assertEqual(cart_res.status_code, status.HTTP_200_OK)
+        variant_payload = cart_res.data["data"]["variant_items"][0]["variant"]
+        self.assertIn("cart-variant", variant_payload["image"])
+        self.assertEqual(variant_payload["image_alt_text"], "Black crew sock")
+
         self.cart.shipping_address = None
         self.cart.billing_address = None
         self.cart.shipping_method = None
@@ -212,6 +293,74 @@ class E2ECheckoutLifecycleTests(APITestCase):
         self.assertTrue(clear_res.data["success"])
         self.assertEqual(clear_res.data["data"]["variant_items"], [])
         self.assertEqual(CartVariantItem.objects.filter(cart=self.cart).count(), 0)
+
+    def test_catalog_writes_require_admin_or_staff(self):
+        read_res = self.client.get("/api/v1/products/", format="json")
+        self.assertEqual(read_res.status_code, status.HTTP_200_OK)
+
+        customer_write_res = self.client.post(
+            "/api/v1/products/",
+            {
+                "name": "Customer Created Product",
+                "slug": "customer-created-product",
+                "base_currency": "USD",
+                "is_active": True,
+                "is_published": True,
+            },
+            format="json",
+        )
+        self.assertEqual(customer_write_res.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.admin_user)
+        admin_write_res = self.client.post(
+            "/api/v1/products/",
+            {
+                "name": "Admin Created Product",
+                "slug": "admin-created-product",
+                "base_currency": "USD",
+                "is_active": True,
+                "is_published": True,
+            },
+            format="json",
+        )
+        self.assertEqual(admin_write_res.status_code, status.HTTP_201_CREATED)
+        self.client.force_authenticate(user=self.user)
+
+    def test_variant_lookup_returns_requested_active_published_variants(self):
+        ProductImage.objects.create(
+            product=self.product,
+            variant=self.variant,
+            image=tiny_image("lookup-variant.gif"),
+            alt_text="Lookup image",
+        )
+        hidden_product = Product.objects.create(
+            name="Hidden Product",
+            slug="hidden-product",
+            base_currency="USD",
+            is_active=True,
+            is_published=False,
+        )
+        hidden_variant = ProductVariant.objects.create(
+            product=hidden_product,
+            sku="HIDDEN-BLK-M",
+            size="M",
+            color="Black",
+            price=Decimal("12.00"),
+            stock_quantity=5,
+            is_active=True,
+        )
+
+        lookup_res = self.client.get(
+            f"/api/v1/products/variants/lookup/?ids={self.variant.id},{hidden_variant.id}",
+            format="json",
+        )
+
+        self.assertEqual(lookup_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(lookup_res.data["success"])
+        self.assertEqual(len(lookup_res.data["data"]), 1)
+        self.assertEqual(lookup_res.data["data"][0]["id"], self.variant.id)
+        self.assertEqual(lookup_res.data["data"][0]["product_name"], self.product.name)
+        self.assertIn("lookup-variant", lookup_res.data["data"][0]["image"])
 
     def test_guest_cart_merge_preserves_login_local_storage_flow(self):
         CartVariantItem.objects.filter(cart=self.cart).delete()
@@ -306,6 +455,55 @@ class E2ECheckoutLifecycleTests(APITestCase):
             CartVariantItem.objects.get(cart=self.cart, variant=self.variant).quantity,
             1,
         )
+
+    def test_product_image_upload_accepts_only_variants_from_same_product(self):
+        self.client.force_authenticate(user=self.admin_user)
+        upload_res = self.client.post(
+            "/api/v1/products/images/upload/",
+            {
+                "product": self.product.id,
+                "variant_id": self.variant.id,
+                "image": tiny_image("variant-upload.gif"),
+                "alt_text": "Variant upload",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(upload_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(upload_res.data["success"])
+        self.assertEqual(upload_res.data["data"]["variant_id"], self.variant.id)
+
+        other_product = Product.objects.create(
+            name="Other Sock",
+            slug="other-sock",
+            base_currency="USD",
+            is_active=True,
+            is_published=True,
+        )
+        other_variant = ProductVariant.objects.create(
+            product=other_product,
+            sku="OTHER-BLK-M",
+            size="M",
+            color="Black",
+            price=Decimal("15.00"),
+            stock_quantity=5,
+            reserved_quantity=0,
+            is_active=True,
+        )
+
+        mismatch_res = self.client.post(
+            "/api/v1/products/images/upload/",
+            {
+                "product": self.product.id,
+                "variant_id": other_variant.id,
+                "image": tiny_image("wrong-variant.gif"),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(mismatch_res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(mismatch_res.data["success"])
+        self.assertIn("variant_id", mismatch_res.data["errors"])
 
 
 class E2EDiscountValidationTests(APITestCase):

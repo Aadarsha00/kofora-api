@@ -69,4 +69,12 @@ class ResetPasswordSerializer(serializers.Serializer):
 
 
 class GoogleLoginSerializer(serializers.Serializer):
-    code = serializers.CharField()
+    credential = serializers.CharField(required=False, allow_blank=False)
+    id_token = serializers.CharField(required=False, allow_blank=False)
+
+    def validate(self, attrs):
+        token = attrs.get("credential") or attrs.get("id_token")
+        if not token:
+            raise serializers.ValidationError({"credential": ["Google credential is required."]})
+        attrs["id_token"] = token
+        return attrs

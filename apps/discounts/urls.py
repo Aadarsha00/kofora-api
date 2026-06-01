@@ -4,8 +4,10 @@ from rest_framework.routers import DefaultRouter
 from .views import CouponCodeViewSet, CouponValidateView, DiscountViewSet, FirstOrderDiscountApplyView, FirstOrderDiscountView
 
 router = DefaultRouter()
-router.register("", DiscountViewSet, basename="discount")
+# "coupons" must be registered before the catch-all "" discount route so that
+# /discounts/coupons/ resolves to the coupon viewset rather than discount detail.
 router.register("coupons", CouponCodeViewSet, basename="coupon")
+router.register("", DiscountViewSet, basename="discount")
 
 urlpatterns = [
 	path("coupons/validate/", CouponValidateView.as_view(), name="coupon-validate"),

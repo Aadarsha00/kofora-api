@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.categories.models import Category
@@ -51,6 +52,15 @@ class ProductImage(UserAuditModel):
         db_table = "product_images"
         ordering = ["sort_order", "id"]
 
+    def clean(self):
+        super().clean()
+        if self.variant_id and self.product_id and self.variant.product_id != self.product_id:
+            raise ValidationError({"variant": "Selected variant must belong to the same product as the image."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
 
 class ProductVariant(UserAuditModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="variants")
@@ -74,7 +84,9 @@ class ProductVariant(UserAuditModel):
         indexes = [models.Index(fields=["product", "is_active"]), models.Index(fields=["size", "color"]), models.Index(fields=["price"])]
 
     def __str__(self):
-        return f"{self.product.name} - {self.title} ({self.color})"
+        label = self.title or f"{self.color} / {self.size}"
+        return f"{self.product.name} - {label} [{self.sku}]"
+
     @property
     def available_quantity(self):
         available = self.stock_quantity - self.reserved_quantity

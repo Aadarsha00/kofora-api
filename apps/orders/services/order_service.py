@@ -97,3 +97,34 @@ def create_order_from_cart(cart, customer_notes: str = "") -> Order:
     attach_discount_claim_to_order(cart, order)
 
     return order
+
+
+@transaction.atomic
+def update_order_status(order, *, to_status: str, changed_by=None, note: str = "", staff_notes=None) -> Order:
+    valid_statuses = {choice[0] for choice in Order.STATUS_CHOICES}
+    if to_status not in valid_statuses:
+        raise ValueError("Invalid fulfillment status")
+
+    from_status = order.fulfillment_status
+    status_changed = to_status != from_status
+
+    update_fields = ["updated_at"]
+    if status_changed:
+        order.fulfillment_status = to_status
+        update_fields.append("fulfillment_status")
+    if staff_notes is not None:
+        order.staff_notes = staff_notes
+        update_fields.append("staff_notes")
+
+    order.save(update_fields=update_fields)
+
+    if status_changed:
+        OrderStatusHistory.objects.create(
+            order=order,
+            from_status=from_status,
+            to_status=to_status,
+            changed_by=changed_by,
+            note=note,
+        )
+
+    return order
