@@ -161,6 +161,16 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
+ORDER_PAYMENT_RESERVATION_MINUTES = int(os.getenv("ORDER_PAYMENT_RESERVATION_MINUTES", "60"))
+ORDER_EXPIRATION_SWEEP_MINUTES = int(os.getenv("ORDER_EXPIRATION_SWEEP_MINUTES", "10"))
+
+CELERY_BEAT_SCHEDULE = {
+    "expire-unpaid-orders": {
+        "task": "apps.orders.expire_unpaid_orders",
+        "schedule": timedelta(minutes=ORDER_EXPIRATION_SWEEP_MINUTES),
+    },
+}
+
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 EMAIL_HOST = os.getenv("EMAIL_HOST", "")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))

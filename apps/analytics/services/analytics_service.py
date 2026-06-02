@@ -1,8 +1,15 @@
+from datetime import timedelta
+
 from django.db.models import Count, F, Sum
+from django.db.models.functions import TruncDate
+from django.utils import timezone
 
 from apps.orders.models import Order
 from apps.products.models import Product, ProductVariant
 from apps.users.models import User
+
+
+DASHBOARD_TREND_DAYS = 14
 
 
 def revenue_summary():
@@ -29,6 +36,37 @@ def dashboard_summary():
     awaiting_fulfillment = Order.objects.filter(
         fulfillment_status__in=[Order.STATUS_PAID, Order.STATUS_PROCESSING]
     ).count()
+    status_labels = dict(Order.STATUS_CHOICES)
+    order_status_breakdown = [
+        {
+            "status": status,
+            "label": label,
+            "count": orders_by_status.get(status, 0),
+        }
+        for status, label in Order.STATUS_CHOICES
+    ]
+
+    today = timezone.localdate()
+    start_date = today - timedelta(days=DASHBOARD_TREND_DAYS - 1)
+    trend_rows = (
+        paid_orders.filter(created_at__date__gte=start_date)
+        .annotate(day=TruncDate("created_at"))
+        .values("day")
+        .annotate(revenue=Sum("grand_total"), orders=Count("id"))
+        .order_by("day")
+    )
+    trend_by_date = {row["day"]: row for row in trend_rows}
+    revenue_trend = []
+    for day_offset in range(DASHBOARD_TREND_DAYS):
+        day = start_date + timedelta(days=day_offset)
+        row = trend_by_date.get(day, {})
+        revenue_trend.append(
+            {
+                "date": day.isoformat(),
+                "revenue": row.get("revenue") or 0,
+                "orders": row.get("orders") or 0,
+            }
+        )
 
     recent_orders = [
         {
@@ -51,6 +89,17 @@ def dashboard_summary():
         .order_by("available")
     )
     low_stock_count = low_stock_qs.count()
+    active_variants = ProductVariant.objects.filter(is_active=True).annotate(
+        available=F("stock_quantity") - F("reserved_quantity")
+    )
+    inventory_health = {
+        "healthy": active_variants.filter(available__gt=F("low_stock_threshold")).count(),
+        "low": active_variants.filter(
+            stock_quantity__gt=F("reserved_quantity"),
+            available__lte=F("low_stock_threshold"),
+        ).count(),
+        "out": active_variants.filter(stock_quantity__lte=F("reserved_quantity")).count(),
+    }
     low_stock = [
         {
             "id": variant.id,
@@ -70,19 +119,26 @@ def dashboard_summary():
             "total_revenue": total_revenue,
             "paid_orders": paid_count,
             "average_order_value": (total_revenue / paid_count) if paid_count else 0,
+            "trend": revenue_trend,
         },
         "orders": {
             "total": total_orders,
             "awaiting_fulfillment": awaiting_fulfillment,
             "by_status": orders_by_status,
+            "status_breakdown": order_status_breakdown,
         },
         "catalog": {
             "product_count": Product.objects.count(),
             "published_count": Product.objects.filter(is_published=True).count(),
             "low_stock_count": low_stock_count,
+            "inventory_health": inventory_health,
         },
         "customers": {
             "total": User.objects.filter(role=User.ROLE_CUSTOMER).count(),
+            "active": User.objects.filter(role=User.ROLE_CUSTOMER, is_active=True).count(),
+            "inactive": User.objects.filter(role=User.ROLE_CUSTOMER, is_active=False).count(),
+            "verified": User.objects.filter(role=User.ROLE_CUSTOMER, is_email_verified=True).count(),
+            "marketing_opt_in": User.objects.filter(role=User.ROLE_CUSTOMER, marketing_opt_in=True).count(),
         },
         "recent_orders": recent_orders,
         "low_stock": low_stock,

@@ -7,7 +7,7 @@ class ProductImageInline(admin.TabularInline):
     model = ProductImage
     extra = 0
     autocomplete_fields = ("variant",)
-    fields = ("image", "variant", "alt_text", "sort_order", "is_active")
+    fields = ("image", "variant", "alt_text", "sort_order", "is_primary", "is_active")
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "variant":
@@ -27,6 +27,7 @@ class ProductVariantInline(admin.TabularInline):
         "title",
         "size",
         "color",
+        "color_mix",
         "price",
         "compare_at_price",
         "stock_quantity",
@@ -42,12 +43,30 @@ class ProductVariantAdmin(admin.ModelAdmin):
     list_filter = ("is_active", "product", "color", "size")
     search_fields = ("sku", "title", "color", "size", "product__name", "product__slug")
     autocomplete_fields = ("product",)
+    fields = (
+        "product",
+        "sku",
+        "barcode",
+        "title",
+        "size",
+        "color",
+        "color_mix",
+        "price",
+        "compare_at_price",
+        "cost_price",
+        "stock_quantity",
+        "reserved_quantity",
+        "low_stock_threshold",
+        "is_active",
+        "image_override",
+        "weight_grams",
+    )
 
 
 @admin.register(ProductImage)
 class ProductImageAdmin(admin.ModelAdmin):
-    list_display = ("id", "product", "variant", "alt_text", "sort_order", "is_active")
-    list_filter = ("is_active", "product")
+    list_display = ("id", "product", "variant", "alt_text", "sort_order", "is_primary", "is_active")
+    list_filter = ("is_active", "is_primary", "product")
     search_fields = ("product__name", "product__slug", "variant__sku", "variant__title", "alt_text")
     autocomplete_fields = ("product", "variant")
 

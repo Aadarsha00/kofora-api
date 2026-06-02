@@ -46,11 +46,16 @@ class ProductImage(UserAuditModel):
     image = models.ImageField(upload_to="products/gallery/")
     alt_text = models.CharField(max_length=255, blank=True)
     sort_order = models.PositiveIntegerField(default=0)
+    is_primary = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         db_table = "product_images"
-        ordering = ["sort_order", "id"]
+        ordering = ["variant_id", "-is_primary", "sort_order", "id"]
+        indexes = [
+            models.Index(fields=["product", "variant", "is_primary"], name="product_ima_product_686890_idx"),
+            models.Index(fields=["product", "variant", "sort_order"], name="product_ima_product_e5a523_idx"),
+        ]
 
     def clean(self):
         super().clean()
@@ -59,7 +64,45 @@ class ProductImage(UserAuditModel):
 
     def save(self, *args, **kwargs):
         self.full_clean()
-        return super().save(*args, **kwargs)
+        if not self.pk and not self.is_primary:
+            if self.variant_id:
+                color_variant_ids = ProductVariant.objects.filter(
+                    product_id=self.product_id,
+                    color=self.variant.color,
+                ).values_list("id", flat=True)
+                has_primary = ProductImage.objects.filter(
+                    product_id=self.product_id,
+                    variant_id__in=color_variant_ids,
+                    is_primary=True,
+                    is_active=True,
+                ).exists()
+            else:
+                has_primary = ProductImage.objects.filter(
+                    product_id=self.product_id,
+                    variant_id__isnull=True,
+                    is_primary=True,
+                    is_active=True,
+                ).exists()
+            self.is_primary = not has_primary
+        result = super().save(*args, **kwargs)
+        if self.is_primary:
+            if self.variant_id:
+                color_variant_ids = ProductVariant.objects.filter(
+                    product_id=self.product_id,
+                    color=self.variant.color,
+                ).values_list("id", flat=True)
+                ProductImage.objects.filter(
+                    product_id=self.product_id,
+                    variant_id__in=color_variant_ids,
+                    is_primary=True,
+                ).exclude(pk=self.pk).update(is_primary=False)
+            else:
+                ProductImage.objects.filter(
+                    product_id=self.product_id,
+                    variant_id__isnull=True,
+                    is_primary=True,
+                ).exclude(pk=self.pk).update(is_primary=False)
+        return result
 
 
 class ProductVariant(UserAuditModel):
@@ -69,6 +112,7 @@ class ProductVariant(UserAuditModel):
     title = models.CharField(max_length=180, blank=True)
     size = models.CharField(max_length=80)
     color = models.CharField(max_length=80)
+    color_mix = models.JSONField(default=list, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     compare_at_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)

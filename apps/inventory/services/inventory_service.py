@@ -12,6 +12,8 @@ class InsufficientStockError(Exception):
 
 @transaction.atomic
 def reserve_stock(variant_id: int, quantity: int, reference: str) -> None:
+    if quantity <= 0:
+        raise ValueError("Quantity must be greater than zero")
     variant = ProductVariant.objects.select_for_update().get(pk=variant_id)
     if variant.available_quantity < quantity:
         raise InsufficientStockError("Insufficient stock")
@@ -28,7 +30,13 @@ def reserve_stock(variant_id: int, quantity: int, reference: str) -> None:
 
 @transaction.atomic
 def commit_stock(variant_id: int, quantity: int, reference: str) -> None:
+    if quantity <= 0:
+        raise ValueError("Quantity must be greater than zero")
     variant = ProductVariant.objects.select_for_update().get(pk=variant_id)
+    if variant.reserved_quantity < quantity:
+        raise InsufficientStockError("Insufficient reserved stock")
+    if variant.stock_quantity < quantity:
+        raise InsufficientStockError("Insufficient stock")
     variant.stock_quantity = F("stock_quantity") - quantity
     variant.reserved_quantity = F("reserved_quantity") - quantity
     variant.save(update_fields=["stock_quantity", "reserved_quantity", "updated_at"])
@@ -43,7 +51,11 @@ def commit_stock(variant_id: int, quantity: int, reference: str) -> None:
 
 @transaction.atomic
 def release_reserved_stock(variant_id: int, quantity: int, reference: str, reason: str) -> None:
+    if quantity <= 0:
+        raise ValueError("Quantity must be greater than zero")
     variant = ProductVariant.objects.select_for_update().get(pk=variant_id)
+    if variant.reserved_quantity < quantity:
+        raise InsufficientStockError("Insufficient reserved stock")
     variant.reserved_quantity = F("reserved_quantity") - quantity
     variant.save(update_fields=["reserved_quantity", "updated_at"])
     InventoryAdjustment.objects.create(

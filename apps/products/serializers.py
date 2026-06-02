@@ -1,4 +1,5 @@
 import os
+import re
 from urllib.parse import urlparse
 
 import requests
@@ -7,13 +8,54 @@ from rest_framework import serializers
 
 from .models import Bundle, BundleItem, Product, ProductImage, ProductVariant
 
+HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def normalize_color_mix(value):
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list):
+        raise serializers.ValidationError("Color mix must be a list.")
+
+    normalized = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise serializers.ValidationError(f"Color mix item {index + 1} must be an object.")
+
+        name = str(item.get("name", "")).strip()
+        hex_value = str(item.get("hex", "")).strip()
+        quantity_value = item.get("quantity", 1)
+
+        if not name:
+            raise serializers.ValidationError(f"Color mix item {index + 1} needs a color name.")
+        if hex_value and not HEX_COLOR_RE.match(hex_value):
+            raise serializers.ValidationError(f"Color mix item {index + 1} has an invalid hex color.")
+
+        try:
+            quantity = int(quantity_value)
+        except (TypeError, ValueError) as exc:
+            raise serializers.ValidationError(f"Color mix item {index + 1} needs a valid quantity.") from exc
+
+        if quantity < 1:
+            raise serializers.ValidationError(f"Color mix item {index + 1} quantity must be at least 1.")
+
+        normalized.append(
+            {
+                "name": name[:60],
+                "hex": hex_value,
+                "quantity": quantity,
+            }
+        )
+
+    return normalized
+
 
 class ProductImageSerializer(serializers.ModelSerializer):
     variant_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = ProductImage
-        fields = ("id", "image", "alt_text", "sort_order", "is_active", "variant", "variant_id")
+        fields = ("id", "image", "alt_text", "sort_order", "is_primary", "is_active", "variant", "variant_id")
 
 
 class ProductImageUploadSerializer(serializers.ModelSerializer):
@@ -27,7 +69,7 @@ class ProductImageUploadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductImage
-        fields = ("id", "product", "image", "image_url", "alt_text", "sort_order", "is_active", "variant_id")
+        fields = ("id", "product", "image", "image_url", "alt_text", "sort_order", "is_primary", "is_active", "variant_id")
 
     def validate(self, attrs):
         image_file = attrs.get("image")
@@ -61,6 +103,9 @@ class ProductImageUploadSerializer(serializers.ModelSerializer):
 class ProductVariantSerializer(serializers.ModelSerializer):
     available_quantity = serializers.IntegerField(read_only=True)
 
+    def validate_color_mix(self, value):
+        return normalize_color_mix(value)
+
     class Meta:
         model = ProductVariant
         fields = (
@@ -70,6 +115,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "title",
             "size",
             "color",
+            "color_mix",
             "price",
             "compare_at_price",
             "cost_price",
@@ -85,17 +131,25 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
 class AdminProductVariantSerializer(serializers.ModelSerializer):
     available_quantity = serializers.IntegerField(read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_slug = serializers.SlugField(source="product.slug", read_only=True)
+
+    def validate_color_mix(self, value):
+        return normalize_color_mix(value)
 
     class Meta:
         model = ProductVariant
         fields = (
             "id",
             "product",
+            "product_name",
+            "product_slug",
             "sku",
             "barcode",
             "title",
             "size",
             "color",
+            "color_mix",
             "price",
             "compare_at_price",
             "cost_price",
@@ -128,6 +182,7 @@ class ProductVariantLookupSerializer(serializers.ModelSerializer):
             "title",
             "size",
             "color",
+            "color_mix",
             "price",
             "compare_at_price",
             "available_quantity",
@@ -136,20 +191,27 @@ class ProductVariantLookupSerializer(serializers.ModelSerializer):
             "image_alt_text",
         )
 
-    def _selected_image(self, obj):
-        variant_image = obj.images.filter(is_active=True).order_by("sort_order", "id").first()
-        if variant_image:
-            return variant_image
-        return obj.product.images.filter(is_active=True, variant__isnull=True).order_by("sort_order", "id").first()
+    def _variant_image(self, obj):
+        color_variant_ids = obj.product.variants.filter(color=obj.color).values_list("id", flat=True)
+        return obj.product.images.filter(
+            is_active=True,
+            variant_id__in=color_variant_ids,
+        ).order_by("-is_primary", "sort_order", "id").first()
+
+    def _product_image(self, obj):
+        return obj.product.images.filter(is_active=True, variant__isnull=True).order_by("-is_primary", "sort_order", "id").first()
 
     def get_image(self, obj):
+        image = self._variant_image(obj)
+        if image:
+            return image.image.url
         if obj.image_override:
             return obj.image_override.url
-        image = self._selected_image(obj)
+        image = self._product_image(obj)
         return image.image.url if image else None
 
     def get_image_alt_text(self, obj):
-        image = self._selected_image(obj)
+        image = self._variant_image(obj) or self._product_image(obj)
         if image and image.alt_text:
             return image.alt_text
         return obj.title or obj.product.name

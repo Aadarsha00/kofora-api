@@ -1,11 +1,16 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 
 from apps.cart.services.cart_service import calculate_cart_totals
 from apps.discounts.services.discount_service import attach_discount_claim_to_order, validate_cart_discount_claim
+from apps.inventory.services.inventory_service import InsufficientStockError
+from apps.payments.models import PaymentTransaction
 
 from ..models import Order, OrderAddressSnapshot, OrderItem, OrderStatusHistory
+from .stock_service import release_reserved_stock_for_order, reserve_order_stock_from_cart
 
 
 def generate_order_number() -> str:
@@ -60,6 +65,11 @@ def create_order_from_cart(cart, customer_notes: str = "") -> Order:
             address_line_1=cart.billing_address.address_line_1,
             address_line_2=cart.billing_address.address_line_2,
         )
+
+    try:
+        reserve_order_stock_from_cart(cart, order)
+    except InsufficientStockError as exc:
+        raise ValueError(str(exc)) from exc
 
     for item in cart.variant_items.select_related("variant", "variant__product"):
         OrderItem.objects.create(
@@ -119,6 +129,9 @@ def update_order_status(order, *, to_status: str, changed_by=None, note: str = "
     order.save(update_fields=update_fields)
 
     if status_changed:
+        if to_status == Order.STATUS_CANCELLED:
+            release_reserved_stock_for_order(order)
+
         OrderStatusHistory.objects.create(
             order=order,
             from_status=from_status,
@@ -128,3 +141,45 @@ def update_order_status(order, *, to_status: str, changed_by=None, note: str = "
         )
 
     return order
+
+
+def get_expirable_unpaid_orders(*, older_than_minutes: int | None = None, now=None):
+    minutes = older_than_minutes or settings.ORDER_PAYMENT_RESERVATION_MINUTES
+    cutoff = (now or timezone.now()) - timedelta(minutes=minutes)
+    return Order.objects.filter(
+        fulfillment_status=Order.STATUS_AWAITING_PAYMENT,
+        payment_status="pending",
+        created_at__lte=cutoff,
+    )
+
+
+@transaction.atomic
+def expire_unpaid_orders(*, older_than_minutes: int | None = None) -> int:
+    minutes = older_than_minutes or settings.ORDER_PAYMENT_RESERVATION_MINUTES
+    expired_count = 0
+    orders = list(get_expirable_unpaid_orders(older_than_minutes=minutes).select_for_update().order_by("created_at"))
+
+    for order in orders:
+        from_status = order.fulfillment_status
+        release_reserved_stock_for_order(order)
+        PaymentTransaction.objects.filter(
+            order=order,
+            status=PaymentTransaction.STATUS_PENDING,
+        ).update(
+            status=PaymentTransaction.STATUS_FAILED,
+            failure_reason="Order expired before payment completed",
+            updated_at=timezone.now(),
+        )
+
+        order.payment_status = "expired"
+        order.fulfillment_status = Order.STATUS_CANCELLED
+        order.save(update_fields=["payment_status", "fulfillment_status", "updated_at"])
+        OrderStatusHistory.objects.create(
+            order=order,
+            from_status=from_status,
+            to_status=Order.STATUS_CANCELLED,
+            note=f"Payment window expired after {minutes} minutes; reserved stock released",
+        )
+        expired_count += 1
+
+    return expired_count

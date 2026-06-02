@@ -1,9 +1,11 @@
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -12,7 +14,9 @@ from apps.authentication.models import GoogleOAuthAccount
 from apps.cart.models import Cart, CartVariantItem
 from apps.categories.models import Category
 from apps.discounts.models import CouponCode, Discount
+from apps.inventory.models import InventoryAdjustment
 from apps.orders.models import Order
+from apps.orders.services.order_service import expire_unpaid_orders
 from apps.payments.models import PaymentTransaction
 from apps.products.models import Product, ProductImage, ProductVariant
 from apps.shipping.models import ShippingMethod, ShippingZone
@@ -189,6 +193,17 @@ class E2ECheckoutLifecycleTests(APITestCase):
         self.assertEqual(order.grand_total, Decimal("48.58"))
         self.assertEqual(order.items.count(), 1)
         self.assertEqual(order.address_snapshots.count(), 2)
+        self.variant.refresh_from_db()
+        self.assertEqual(self.variant.stock_quantity, 50)
+        self.assertEqual(self.variant.reserved_quantity, 2)
+        self.assertTrue(
+            InventoryAdjustment.objects.filter(
+                variant=self.variant,
+                reference=order.order_number,
+                notes="Reserved stock",
+                quantity_delta=-2,
+            ).exists()
+        )
 
         PaymentTransaction.objects.create(
             order=order,
@@ -219,6 +234,110 @@ class E2ECheckoutLifecycleTests(APITestCase):
         order.refresh_from_db()
         self.assertEqual(order.payment_status, "paid")
         self.assertEqual(order.fulfillment_status, Order.STATUS_PROCESSING)
+        self.variant.refresh_from_db()
+        self.assertEqual(self.variant.stock_quantity, 48)
+        self.assertEqual(self.variant.reserved_quantity, 0)
+        self.assertTrue(
+            InventoryAdjustment.objects.filter(
+                variant=self.variant,
+                reference=order.order_number,
+                notes="Committed stock",
+                quantity_delta=-2,
+            ).exists()
+        )
+
+    def test_order_creation_rejects_insufficient_stock(self):
+        self.variant.stock_quantity = 1
+        self.variant.save(update_fields=["stock_quantity", "updated_at"])
+
+        create_res = self.client.post("/api/v1/orders/create-from-cart/", {"customer_notes": ""}, format="json")
+
+        self.assertEqual(create_res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(create_res.data["success"])
+        self.assertEqual(Order.objects.count(), 0)
+        self.variant.refresh_from_db()
+        self.assertEqual(self.variant.stock_quantity, 1)
+        self.assertEqual(self.variant.reserved_quantity, 0)
+
+    def test_unpaid_order_expiration_releases_reserved_stock(self):
+        create_res = self.client.post("/api/v1/orders/create-from-cart/", {"customer_notes": ""}, format="json")
+        self.assertEqual(create_res.status_code, status.HTTP_200_OK)
+        order = Order.objects.get(id=create_res.data["data"]["id"])
+        PaymentTransaction.objects.create(
+            order=order,
+            provider=PaymentTransaction.PROVIDER_STRIPE,
+            provider_payment_id="pi_expire_test",
+            amount=order.grand_total,
+            currency=order.currency,
+            status=PaymentTransaction.STATUS_PENDING,
+        )
+        Order.objects.filter(pk=order.pk).update(created_at=timezone.now() - timedelta(minutes=61))
+
+        expired_count = expire_unpaid_orders(older_than_minutes=60)
+
+        self.assertEqual(expired_count, 1)
+        order.refresh_from_db()
+        self.variant.refresh_from_db()
+        txn = order.payment_transactions.get()
+        self.assertEqual(order.payment_status, "expired")
+        self.assertEqual(order.fulfillment_status, Order.STATUS_CANCELLED)
+        self.assertEqual(txn.status, PaymentTransaction.STATUS_FAILED)
+        self.assertEqual(txn.failure_reason, "Order expired before payment completed")
+        self.assertEqual(self.variant.stock_quantity, 50)
+        self.assertEqual(self.variant.reserved_quantity, 0)
+        self.assertTrue(
+            InventoryAdjustment.objects.filter(
+                variant=self.variant,
+                reference=order.order_number,
+                notes="Released reserved stock",
+                quantity_delta=2,
+            ).exists()
+        )
+
+    @patch("apps.payments.views.verify_stripe_signature", return_value=True)
+    def test_late_payment_webhook_after_expiration_does_not_commit_stock(self, _mock_sig):
+        create_res = self.client.post("/api/v1/orders/create-from-cart/", {"customer_notes": ""}, format="json")
+        self.assertEqual(create_res.status_code, status.HTTP_200_OK)
+        order = Order.objects.get(id=create_res.data["data"]["id"])
+        txn = PaymentTransaction.objects.create(
+            order=order,
+            provider=PaymentTransaction.PROVIDER_STRIPE,
+            provider_payment_id="pi_late_test",
+            amount=order.grand_total,
+            currency=order.currency,
+            status=PaymentTransaction.STATUS_PENDING,
+        )
+        Order.objects.filter(pk=order.pk).update(created_at=timezone.now() - timedelta(minutes=61))
+        self.assertEqual(expire_unpaid_orders(older_than_minutes=60), 1)
+
+        webhook_res = self.client.post(
+            "/api/v1/payments/webhooks/stripe/",
+            {
+                "id": "evt_late_test",
+                "type": "payment_intent.succeeded",
+                "data": {"object": {"id": "pi_late_test"}},
+            },
+            format="json",
+            HTTP_STRIPE_SIGNATURE="t=1,v1=test",
+        )
+
+        self.assertEqual(webhook_res.status_code, status.HTTP_200_OK)
+        order.refresh_from_db()
+        self.variant.refresh_from_db()
+        txn.refresh_from_db()
+        self.assertEqual(order.payment_status, "expired")
+        self.assertEqual(order.fulfillment_status, Order.STATUS_CANCELLED)
+        self.assertEqual(txn.status, PaymentTransaction.STATUS_SUCCEEDED)
+        self.assertEqual(txn.failure_reason, "Payment completed after order expired; manual review required")
+        self.assertEqual(self.variant.stock_quantity, 50)
+        self.assertEqual(self.variant.reserved_quantity, 0)
+        self.assertFalse(
+            InventoryAdjustment.objects.filter(
+                variant=self.variant,
+                reference=order.order_number,
+                notes="Committed stock",
+            ).exists()
+        )
 
     def test_order_creation_uses_coupon_adjusted_cart_totals(self):
         discount = Discount.objects.create(
@@ -504,6 +623,61 @@ class E2ECheckoutLifecycleTests(APITestCase):
         self.assertEqual(mismatch_res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(mismatch_res.data["success"])
         self.assertIn("variant_id", mismatch_res.data["errors"])
+
+    def test_admin_can_deactivate_and_reactivate_customer_without_deleting_orders(self):
+        create_res = self.client.post("/api/v1/orders/create-from-cart/", {"customer_notes": ""}, format="json")
+        self.assertEqual(create_res.status_code, status.HTTP_200_OK)
+        order_id = create_res.data["data"]["id"]
+
+        self.client.force_authenticate(user=self.admin_user)
+        deactivate_res = self.client.patch(
+            f"/api/v1/users/customers/{self.user.id}/status/",
+            {"is_active": False},
+            format="json",
+        )
+
+        self.assertEqual(deactivate_res.status_code, status.HTTP_200_OK)
+        self.assertFalse(deactivate_res.data["data"]["is_active"])
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+        self.assertTrue(Order.objects.filter(id=order_id, customer=self.user).exists())
+
+        reactivate_res = self.client.patch(
+            f"/api/v1/users/customers/{self.user.id}/status/",
+            {"is_active": True},
+            format="json",
+        )
+
+        self.assertEqual(reactivate_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(reactivate_res.data["data"]["is_active"])
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+
+    def test_admin_dashboard_returns_chart_payload(self):
+        create_res = self.client.post("/api/v1/orders/create-from-cart/", {"customer_notes": ""}, format="json")
+        self.assertEqual(create_res.status_code, status.HTTP_200_OK)
+        order = Order.objects.get(id=create_res.data["data"]["id"])
+        Order.objects.filter(pk=order.pk).update(
+            payment_status="paid",
+            fulfillment_status=Order.STATUS_PROCESSING,
+            created_at=timezone.now() - timedelta(days=1),
+        )
+
+        self.client.force_authenticate(user=self.admin_user)
+        dashboard_res = self.client.get("/api/v1/analytics/admin/dashboard/", format="json")
+
+        self.assertEqual(dashboard_res.status_code, status.HTTP_200_OK)
+        data = dashboard_res.data["data"]
+        self.assertEqual(len(data["revenue"]["trend"]), 14)
+        self.assertIn("date", data["revenue"]["trend"][0])
+        self.assertIn("revenue", data["revenue"]["trend"][0])
+        self.assertIn("orders", data["revenue"]["trend"][0])
+        self.assertGreaterEqual(len(data["orders"]["status_breakdown"]), 1)
+        self.assertIn("healthy", data["catalog"]["inventory_health"])
+        self.assertIn("low", data["catalog"]["inventory_health"])
+        self.assertIn("out", data["catalog"]["inventory_health"])
+        self.assertEqual(data["customers"]["total"], 1)
+        self.assertEqual(data["customers"]["active"], 1)
 
 
 class E2EDiscountValidationTests(APITestCase):

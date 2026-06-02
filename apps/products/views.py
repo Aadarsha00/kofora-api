@@ -1,3 +1,4 @@
+from django.db import models
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
@@ -30,8 +31,22 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
     permission_classes = [ReadOnlyOrAdminStaff]
     queryset = ProductVariant.objects.select_related("product").all()
     filterset_fields = ("product", "is_active", "size", "color")
-    search_fields = ("sku", "title", "size", "color")
-    ordering_fields = ("price", "created_at")
+    search_fields = ("sku", "title", "size", "color", "product__name", "product__slug")
+    ordering_fields = ("price", "created_at", "stock_quantity", "low_stock_threshold", "sku")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        stock_status = self.request.query_params.get("stock_status", "").strip().lower()
+        if stock_status == "out":
+            return queryset.filter(stock_quantity__lte=models.F("reserved_quantity"))
+        if stock_status == "low":
+            return queryset.filter(
+                stock_quantity__gt=models.F("reserved_quantity"),
+                stock_quantity__lte=models.F("low_stock_threshold"),
+            )
+        if stock_status == "available":
+            return queryset.filter(stock_quantity__gt=models.F("reserved_quantity"))
+        return queryset
 
 
 class BundleViewSet(viewsets.ModelViewSet):

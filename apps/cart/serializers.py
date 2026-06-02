@@ -24,6 +24,7 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
             "title",
             "size",
             "color",
+            "color_mix",
             "price",
             "stock_quantity",
             "available_quantity",
@@ -32,21 +33,27 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
             "image_alt_text",
         )
 
-    def _selected_image(self, obj):
-        variant_image = obj.images.filter(is_active=True).order_by("sort_order", "id").first()
-        if variant_image:
-            return variant_image
-        return obj.product.images.filter(is_active=True, variant__isnull=True).order_by("sort_order", "id").first()
+    def _variant_image(self, obj):
+        color_variant_ids = obj.product.variants.filter(color=obj.color).values_list("id", flat=True)
+        return obj.product.images.filter(
+            is_active=True,
+            variant_id__in=color_variant_ids,
+        ).order_by("-is_primary", "sort_order", "id").first()
+
+    def _product_image(self, obj):
+        return obj.product.images.filter(is_active=True, variant__isnull=True).order_by("-is_primary", "sort_order", "id").first()
 
     def get_image(self, obj):
+        image = self._variant_image(obj)
+        if image:
+            return image.image.url
         if obj.image_override:
             return obj.image_override.url
-
-        image = self._selected_image(obj)
+        image = self._product_image(obj)
         return image.image.url if image else None
 
     def get_image_alt_text(self, obj):
-        image = self._selected_image(obj)
+        image = self._variant_image(obj) or self._product_image(obj)
         if image and image.alt_text:
             return image.alt_text
         return obj.title or obj.product.name

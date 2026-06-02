@@ -67,6 +67,17 @@ Production-grade, API-first ecommerce backend for Kofora (premium sock brand), b
    - `celery -A kofora_backend worker --loglevel=info`
    - `celery -A kofora_backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler`
 
+## Order Stock Reservations
+
+Unpaid orders reserve inventory while they are awaiting payment. Celery Beat runs `apps.orders.expire_unpaid_orders` every `ORDER_EXPIRATION_SWEEP_MINUTES` minutes and cancels unpaid orders older than `ORDER_PAYMENT_RESERVATION_MINUTES`, releasing their reserved stock.
+
+Manual cleanup:
+
+```bash
+python manage.py expire_unpaid_orders --dry-run
+python manage.py expire_unpaid_orders
+```
+
 ## API Envelope
 
 All API responses are wrapped by `apps.core.renderers.EnvelopedJSONRenderer`.

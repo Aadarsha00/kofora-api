@@ -9,6 +9,7 @@ from django.utils import timezone
 from apps.cart.models import Cart
 from apps.discounts.services.discount_service import redeem_discount_claim_for_order
 from apps.orders.models import Order, OrderStatusHistory
+from apps.orders.services.stock_service import commit_reserved_stock_for_order
 
 from ..models import PaymentTransaction, PaymentWebhookEvent, RefundTransaction
 
@@ -39,14 +40,35 @@ def _get_or_create_idempotent_txn(order: Order, provider: str, idempotency_key: 
 
 
 def _complete_paid_transaction(txn: PaymentTransaction, provider_reference_id: str = "") -> PaymentTransaction:
-    was_paid = txn.status == PaymentTransaction.STATUS_SUCCEEDED and txn.order.payment_status == "paid"
+    was_succeeded = txn.status == PaymentTransaction.STATUS_SUCCEEDED
+    was_paid = was_succeeded and txn.order.payment_status == "paid"
     previous_status = txn.order.fulfillment_status
+    payment_window_expired = txn.order.payment_status == "expired" or (
+        txn.order.fulfillment_status == Order.STATUS_CANCELLED and txn.order.payment_status != "paid"
+    )
     txn.status = PaymentTransaction.STATUS_SUCCEEDED
+    update_fields = ["status", "provider_reference_id", "updated_at"]
     if provider_reference_id:
         txn.provider_reference_id = provider_reference_id
-    txn.save(update_fields=["status", "provider_reference_id", "updated_at"])
+    if payment_window_expired:
+        txn.failure_reason = "Payment completed after order expired; manual review required"
+        update_fields.append("failure_reason")
+    txn.save(update_fields=update_fields)
 
     order = txn.order
+    if payment_window_expired:
+        if not was_succeeded:
+            OrderStatusHistory.objects.create(
+                order=order,
+                from_status=previous_status,
+                to_status=order.fulfillment_status,
+                note="Payment confirmed after order expired; manual review required",
+            )
+        return txn
+
+    if not was_paid:
+        commit_reserved_stock_for_order(order)
+
     order.payment_status = "paid"
     order.fulfillment_status = Order.STATUS_PROCESSING
     order.save(update_fields=["payment_status", "fulfillment_status", "updated_at"])
