@@ -62,7 +62,8 @@ Production-grade, API-first ecommerce backend for Kofora (premium sock brand), b
 6. Create superuser:
    - `python manage.py createsuperuser`
 7. Start development server:
-   - `python manage.py runserver`
+   - `python manage.py runserver 127.0.0.1:8000`
+   - The frontend `.env.local` points to `http://127.0.0.1:8000/api/v1` for local Kofora development.
 8. Start Celery worker and beat in separate terminals:
    - `celery -A kofora_backend worker --loglevel=info`
    - `celery -A kofora_backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler`

@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.expressions import RawSQL
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
@@ -23,7 +24,23 @@ class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.prefetch_related("categories", "images", "variants").all()
     filterset_fields = ("is_active", "is_featured", "is_published", "base_currency", "categories", "slug")
     search_fields = ("name", "short_description", "full_description", "brand")
-    ordering_fields = ("created_at", "name")
+    ordering_fields = ("created_at", "name", "sales_count")
+
+    def get_queryset(self):
+        sales_count_sql = """
+            COALESCE((
+                SELECT SUM(oi.quantity)
+                FROM order_items oi
+                INNER JOIN orders o ON o.id = oi.order_id
+                INNER JOIN product_variants pv ON pv.sku = oi.variant_sku
+                WHERE pv.product_id = products.id
+                  AND o.payment_status = %s
+            ), 0)
+        """
+
+        return super().get_queryset().annotate(
+            sales_count=RawSQL(sales_count_sql, ("paid",), output_field=models.IntegerField())
+        )
 
 
 class ProductVariantViewSet(viewsets.ModelViewSet):

@@ -17,6 +17,7 @@ class CategoryChildSerializer(serializers.ModelSerializer):
             "parent",
             "name",
             "slug",
+            "taxonomy_group",
             "description",
             "is_active",
             "sort_order",
@@ -43,6 +44,7 @@ class CategorySerializer(serializers.ModelSerializer):
             "parent",
             "name",
             "slug",
+            "taxonomy_group",
             "description",
             "is_active",
             "sort_order",
@@ -54,3 +56,16 @@ class CategorySerializer(serializers.ModelSerializer):
     def get_children(self, obj):
         children = obj.children.filter(is_active=True)
         return CategoryChildSerializer(children, many=True).data
+
+    def validate(self, attrs):
+        taxonomy_group = attrs.get("taxonomy_group", getattr(self.instance, "taxonomy_group", ""))
+        parent = attrs.get("parent", getattr(self.instance, "parent", None))
+
+        if taxonomy_group in {Category.TAXONOMY_PRODUCT_FAMILY, Category.TAXONOMY_AUDIENCE} and parent is not None:
+            raise serializers.ValidationError({"parent": ["Product family and audience categories must be top level."]})
+
+        if taxonomy_group in {Category.TAXONOMY_HEIGHT, Category.TAXONOMY_PURPOSE}:
+            if parent is None or parent.slug != "socks":
+                raise serializers.ValidationError({"parent": ["Height and purpose categories must be children of Socks."]})
+
+        return attrs

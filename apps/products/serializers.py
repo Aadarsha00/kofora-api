@@ -6,9 +6,24 @@ import requests
 from django.core.files.base import ContentFile
 from rest_framework import serializers
 
+from apps.categories.models import Category
+
 from .models import Bundle, BundleItem, Product, ProductImage, ProductVariant
 
 HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+PRODUCT_FAMILY_CATEGORY_SLUGS = {"socks"}
+AUDIENCE_CATEGORY_SLUGS = {"men", "women", "kids", "unisex"}
+SOCK_HEIGHT_CATEGORY_SLUGS = {
+    "no-show",
+    "ankle",
+    "ankel",
+    "quarter",
+    "crew",
+    "crew-socks",
+    "half-calf",
+    "calf",
+    "knee-high",
+}
 
 
 def normalize_color_mix(value):
@@ -220,6 +235,39 @@ class ProductVariantLookupSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, read_only=True)
     variants = ProductVariantSerializer(many=True, read_only=True)
+    sales_count = serializers.IntegerField(read_only=True, default=0)
+
+    def validate(self, attrs):
+        categories = attrs.get("categories")
+
+        if categories is None:
+            if self.instance is not None:
+                return attrs
+            categories = []
+
+        category_slugs = {category.slug for category in categories}
+        category_groups = {category.taxonomy_group for category in categories if category.taxonomy_group}
+        has_product_family = (
+            Category.TAXONOMY_PRODUCT_FAMILY in category_groups
+            or bool(category_slugs & PRODUCT_FAMILY_CATEGORY_SLUGS)
+        )
+        has_audience = (
+            Category.TAXONOMY_AUDIENCE in category_groups
+            or bool(category_slugs & AUDIENCE_CATEGORY_SLUGS)
+        )
+        has_height = (
+            Category.TAXONOMY_HEIGHT in category_groups
+            or bool(category_slugs & SOCK_HEIGHT_CATEGORY_SLUGS)
+        )
+
+        if not has_product_family:
+            raise serializers.ValidationError({"categories": ["Choose a product family."]})
+        if not has_audience:
+            raise serializers.ValidationError({"categories": ["Choose at least one audience."]})
+        if "socks" in category_slugs and not has_height:
+            raise serializers.ValidationError({"categories": ["Choose a sock height."]})
+
+        return attrs
 
     class Meta:
         model = Product
@@ -237,6 +285,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "seo_title",
             "seo_description",
             "categories",
+            "sales_count",
             "images",
             "variants",
             "created_at",

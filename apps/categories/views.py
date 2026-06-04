@@ -9,8 +9,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [ReadOnlyOrAdminStaff]
     lookup_field = "slug"
-    filterset_fields = ("is_active", "parent")
-    search_fields = ("name", "description")
+    filterset_fields = ("is_active", "parent", "taxonomy_group")
+    search_fields = ("name", "description", "slug")
     ordering_fields = ("sort_order", "name", "created_at")
 
     def get_queryset(self):
