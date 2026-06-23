@@ -25,6 +25,13 @@ class Product(UserAuditModel):
     seo_title = models.CharField(max_length=255, blank=True)
     seo_description = models.CharField(max_length=500, blank=True)
     categories = models.ManyToManyField(Category, related_name="products", blank=True)
+    international_shipping = models.ForeignKey(
+        "shipping.InternationalShipping",
+        on_delete=models.SET_NULL,
+        related_name="products",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         db_table = "products"

@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 from rest_framework import serializers
 
 from apps.categories.models import Category
+from apps.shipping.serializers import InternationalShippingSerializer
 
 from .models import Bundle, BundleItem, Product, ProductImage, ProductVariant
 
@@ -235,6 +236,7 @@ class ProductVariantLookupSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, read_only=True)
     variants = ProductVariantSerializer(many=True, read_only=True)
+    international_shipping_details = InternationalShippingSerializer(source="international_shipping", read_only=True)
     sales_count = serializers.IntegerField(read_only=True, default=0)
 
     def validate(self, attrs):
@@ -285,6 +287,8 @@ class ProductSerializer(serializers.ModelSerializer):
             "seo_title",
             "seo_description",
             "categories",
+            "international_shipping",
+            "international_shipping_details",
             "sales_count",
             "images",
             "variants",

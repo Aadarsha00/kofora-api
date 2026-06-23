@@ -21,7 +21,7 @@ from .serializers import (
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
     permission_classes = [ReadOnlyOrAdminStaff]
-    queryset = Product.objects.prefetch_related("categories", "images", "variants").all()
+    queryset = Product.objects.select_related("international_shipping").prefetch_related("categories", "images", "variants").all()
     filterset_fields = ("is_active", "is_featured", "is_published", "base_currency", "categories", "slug")
     search_fields = ("name", "short_description", "full_description", "brand")
     ordering_fields = ("created_at", "name", "sales_count")

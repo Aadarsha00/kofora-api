@@ -73,9 +73,10 @@ class ProductImageAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "brand", "base_currency", "is_active", "is_featured", "is_published")
-    list_filter = ("is_active", "is_featured", "is_published", "base_currency", "brand")
-    search_fields = ("name", "slug", "brand")
+    list_display = ("id", "name", "brand", "base_currency", "international_shipping", "is_active", "is_featured", "is_published")
+    list_filter = ("is_active", "is_featured", "is_published", "base_currency", "brand", "international_shipping")
+    list_select_related = ("international_shipping",)
+    search_fields = ("name", "slug", "brand", "international_shipping__title", "international_shipping__destination_country")
     prepopulated_fields = {"slug": ("name",)}
     filter_horizontal = ("categories",)
     inlines = [ProductImageInline, ProductVariantInline]
