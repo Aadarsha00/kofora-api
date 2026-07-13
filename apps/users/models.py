@@ -1,7 +1,13 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
 from django.db import models
 
 from apps.core.models import TimeStampedModel
+
+
+class UserManager(DjangoUserManager):
+    def create_superuser(self, username=None, email=None, password=None, **extra_fields):
+        extra_fields.setdefault("role", User.ROLE_ADMIN)
+        return super().create_superuser(username=username, email=email, password=password, **extra_fields)
 
 
 class User(AbstractUser, TimeStampedModel):
@@ -21,6 +27,8 @@ class User(AbstractUser, TimeStampedModel):
     phone = models.CharField(max_length=30, blank=True)
     is_email_verified = models.BooleanField(default=False)
     marketing_opt_in = models.BooleanField(default=False)
+
+    objects = UserManager()
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
