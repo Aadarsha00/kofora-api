@@ -3,12 +3,21 @@ from rest_framework import serializers
 from .models import Category
 
 
+def _absolute_image_url(serializer, obj):
+    if not obj.image:
+        return None
+    url = obj.image.url
+    request = serializer.context.get("request")
+    return request.build_absolute_uri(url) if request else url
+
+
 class CategoryChildSerializer(serializers.ModelSerializer):
     """Recursive serializer for nested categories"""
     parent = serializers.SlugRelatedField(
         slug_field="slug", queryset=Category.objects.all(), required=False, allow_null=True
     )
     children = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
@@ -23,12 +32,16 @@ class CategoryChildSerializer(serializers.ModelSerializer):
             "sort_order",
             "seo_title",
             "seo_description",
+            "image",
             "children",
         )
 
     def get_children(self, obj):
         children = obj.children.filter(is_active=True)
-        return CategoryChildSerializer(children, many=True).data
+        return CategoryChildSerializer(children, many=True, context=self.context).data
+
+    def get_image(self, obj):
+        return _absolute_image_url(self, obj)
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -36,6 +49,7 @@ class CategorySerializer(serializers.ModelSerializer):
         slug_field="slug", queryset=Category.objects.all(), required=False, allow_null=True
     )
     children = serializers.SerializerMethodField()
+    image = serializers.ImageField(required=False, allow_null=True, use_url=True)
 
     class Meta:
         model = Category
@@ -50,12 +64,13 @@ class CategorySerializer(serializers.ModelSerializer):
             "sort_order",
             "seo_title",
             "seo_description",
+            "image",
             "children",
         )
 
     def get_children(self, obj):
         children = obj.children.filter(is_active=True)
-        return CategoryChildSerializer(children, many=True).data
+        return CategoryChildSerializer(children, many=True, context=self.context).data
 
     def validate(self, attrs):
         taxonomy_group = attrs.get("taxonomy_group", getattr(self.instance, "taxonomy_group", ""))

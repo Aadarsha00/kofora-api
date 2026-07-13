@@ -19,4 +19,5 @@ urlpatterns = [
     path("notifications/", include("apps.notifications.urls")),
     path("search/", include("apps.search.urls")),
     path("contact/", include("apps.contact.urls")),
+    path("site-images/", include("apps.content.urls")),
 ]

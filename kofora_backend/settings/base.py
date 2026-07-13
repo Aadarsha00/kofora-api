@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.search",
     "apps.contact",
+    "apps.content",
 ]
 
 MIDDLEWARE = [

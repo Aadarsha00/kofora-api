@@ -10,3 +10,15 @@ class CategoryAdmin(admin.ModelAdmin):
     search_fields = ("name", "slug", "description")
     prepopulated_fields = {"slug": ("name",)}
     ordering = ("sort_order", "name")
+    fields = (
+        "parent",
+        "name",
+        "slug",
+        "taxonomy_group",
+        "image",
+        "description",
+        "is_active",
+        "sort_order",
+        "seo_title",
+        "seo_description",
+    )

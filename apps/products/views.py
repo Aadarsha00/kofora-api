@@ -107,7 +107,9 @@ class ProductVariantLookupView(APIView):
 
         return api_success(
             "Product variants retrieved successfully",
-            ProductVariantLookupSerializer(ordered_variants, many=True).data,
+            ProductVariantLookupSerializer(
+                ordered_variants, many=True, context={"request": request}
+            ).data,
         )
 
 

@@ -10,6 +10,7 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
     product_id = serializers.IntegerField(read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_slug = serializers.SlugField(source="product.slug", read_only=True)
+    image_override = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     image_alt_text = serializers.SerializerMethodField()
 
@@ -43,14 +44,24 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
     def _product_image(self, obj):
         return obj.product.images.filter(is_active=True, variant__isnull=True).order_by("-is_primary", "sort_order", "id").first()
 
+    def _absolute_url(self, file_field):
+        if not file_field:
+            return None
+        url = file_field.url
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
+
+    def get_image_override(self, obj):
+        return self._absolute_url(obj.image_override)
+
     def get_image(self, obj):
         image = self._variant_image(obj)
         if image:
-            return image.image.url
+            return self._absolute_url(image.image)
         if obj.image_override:
-            return obj.image_override.url
+            return self._absolute_url(obj.image_override)
         image = self._product_image(obj)
-        return image.image.url if image else None
+        return self._absolute_url(image.image) if image else None
 
     def get_image_alt_text(self, obj):
         image = self._variant_image(obj) or self._product_image(obj)

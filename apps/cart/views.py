@@ -29,8 +29,8 @@ def _positive_int(value, field_name: str, default=None):
     return parsed, None
 
 
-def _cart_response(message: str, cart: Cart):
-    return api_success(message, CartSerializer(cart).data)
+def _cart_response(request, message: str, cart: Cart):
+    return api_success(message, CartSerializer(cart, context={"request": request}).data)
 
 
 class MyCartView(APIView):
@@ -38,7 +38,7 @@ class MyCartView(APIView):
 
     def get(self, request):
         cart, _ = Cart.objects.get_or_create(user=request.user)
-        return _cart_response("Cart fetched successfully", cart)
+        return _cart_response(request, "Cart fetched successfully", cart)
 
 
 class AddToCartView(APIView):
@@ -82,7 +82,7 @@ class AddToCartView(APIView):
             cart_item.quantity += quantity
             cart_item.save()
 
-        return _cart_response("Item added to cart successfully", cart)
+        return _cart_response(request, "Item added to cart successfully", cart)
 
 
 class RemoveFromCartView(APIView):
@@ -97,7 +97,7 @@ class RemoveFromCartView(APIView):
         except CartVariantItem.DoesNotExist:
             return api_error("Cart item not found", status_code=status.HTTP_404_NOT_FOUND)
 
-        return _cart_response("Item removed from cart", cart)
+        return _cart_response(request, "Item removed from cart", cart)
 
     def patch(self, request, item_id):
         cart, _ = Cart.objects.get_or_create(user=request.user)
@@ -119,7 +119,7 @@ class RemoveFromCartView(APIView):
         cart_item.quantity = quantity
         cart_item.save(update_fields=["quantity", "updated_at"])
 
-        return _cart_response("Cart item updated successfully", cart)
+        return _cart_response(request, "Cart item updated successfully", cart)
 
 
 class ClearCartView(APIView):
@@ -132,7 +132,7 @@ class ClearCartView(APIView):
         cart.applied_coupon = None
         cart.applied_discount_claim = None
         cart.save(update_fields=["applied_coupon", "applied_discount_claim", "updated_at"])
-        return _cart_response("Cart cleared successfully", cart)
+        return _cart_response(request, "Cart cleared successfully", cart)
 
 
 class SetShippingMethodView(APIView):
@@ -150,7 +150,7 @@ class SetShippingMethodView(APIView):
         cart, _ = Cart.objects.get_or_create(user=request.user)
         cart.shipping_method = shipping_method
         cart.save(update_fields=["shipping_method", "updated_at"])
-        return _cart_response("Shipping method updated successfully", cart)
+        return _cart_response(request, "Shipping method updated successfully", cart)
 
 
 class SetShippingAddressView(APIView):
@@ -168,7 +168,7 @@ class SetShippingAddressView(APIView):
         cart, _ = Cart.objects.get_or_create(user=request.user)
         cart.shipping_address = address
         cart.save(update_fields=["shipping_address", "updated_at"])
-        return _cart_response("Shipping address updated successfully", cart)
+        return _cart_response(request, "Shipping address updated successfully", cart)
 
 
 class SetBillingAddressView(APIView):
@@ -186,7 +186,7 @@ class SetBillingAddressView(APIView):
         cart, _ = Cart.objects.get_or_create(user=request.user)
         cart.billing_address = address
         cart.save(update_fields=["billing_address", "updated_at"])
-        return _cart_response("Billing address updated successfully", cart)
+        return _cart_response(request, "Billing address updated successfully", cart)
 
 
 class MergeGuestCartView(APIView):
@@ -259,7 +259,7 @@ class MergeGuestCartView(APIView):
                 skipped_variant_ids.append(variant_id)
                 continue
 
-        data = CartSerializer(cart).data
+        data = CartSerializer(cart, context={"request": request}).data
         data["merged_count"] = merged_count
         data["merged_variant_ids"] = merged_variant_ids
         data["skipped_variant_ids"] = skipped_variant_ids
@@ -311,7 +311,7 @@ class ApplyCouponView(APIView):
         cart.applied_discount_claim = None
         cart.save(update_fields=["applied_coupon", "applied_discount_claim", "updated_at"])
 
-        return _cart_response("Coupon applied successfully", cart)
+        return _cart_response(request, "Coupon applied successfully", cart)
 
 
 class RemoveCouponView(APIView):
@@ -332,4 +332,4 @@ class RemoveCouponView(APIView):
         cart.applied_discount_claim = None
         cart.save(update_fields=["applied_coupon", "applied_discount_claim", "updated_at"])
 
-        return _cart_response("Coupon removed successfully", cart)
+        return _cart_response(request, "Coupon removed successfully", cart)
