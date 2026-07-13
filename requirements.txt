@@ -17,3 +17,4 @@ Pillow>=10.4
 stripe>=10.8
 paypalrestsdk>=1.13
 django-cors-headers>=4.4
+whitenoise==6.12.0
