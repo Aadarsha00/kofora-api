@@ -1,0 +1,148 @@
+
+services:
+
+  db:
+
+    image: postgres:16-alpine
+
+    restart: unless-stopped
+
+    environment:
+
+      POSTGRES_DB: kofora_db
+
+      POSTGRES_USER: kofora
+
+      POSTGRES_PASSWORD: Aurelium@666
+
+    volumes:
+
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+
+      test: ["CMD-SHELL", "pg_isready -U kofora -d kofora_db"]
+
+      interval: 5s
+
+      timeout: 5s
+
+      retries: 10
+
+    networks:
+
+      - kofora_net
+
+  redis:
+
+    image: redis:7-alpine
+
+    restart: unless-stopped
+
+    healthcheck:
+
+      test: ["CMD", "redis-cli", "ping"]
+
+      interval: 5s
+
+      timeout: 5s
+
+      retries: 10
+
+    networks:
+
+      - kofora_net
+
+  web:
+
+    build: .
+
+    restart: unless-stopped
+
+    command: >
+
+      sh -c "python manage.py migrate --settings=kofora_backend.settings.production &&
+
+             python manage.py collectstatic --noinput --settings=kofora_backend.settings.production &&
+
+             gunicorn kofora_backend.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120 --access-logfile - --error-logfile -"
+
+    env_file:
+
+      - .env
+
+    environment:
+
+      DJANGO_SETTINGS_MODULE: kofora_backend.settings.production
+
+    volumes:
+
+      - static_volume:/app/staticfiles
+
+      - media_volume:/app/media
+
+    depends_on:
+
+      db:
+
+        condition: service_healthy
+
+      redis:
+
+        condition: service_healthy
+
+    ports:
+
+      - "127.0.0.1:8000:8000"
+
+    networks:
+
+      - kofora_net
+
+  celery_worker:
+    build: .
+    restart: unless-stopped
+    command: celery -A kofora_backend worker --loglevel=info
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: kofora_backend.settings.production
+    volumes:
+      - media_volume:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kofora_net
+
+  celery_beat:
+    build: .
+    restart: unless-stopped
+    command: celery -A kofora_backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: kofora_backend.settings.production
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kofora_net
+networks:
+
+  kofora_net:
+
+    driver: bridge
+
+volumes:
+
+  postgres_data:
+
+  static_volume:
+
+  media_volume:
+
