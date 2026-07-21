@@ -123,7 +123,22 @@ class E2ECheckoutLifecycleTests(APITestCase):
         )
         self.client.force_authenticate(user=self.user)
 
-        self.category = Category.objects.create(name="Crew Socks", slug="crew-socks")
+        self.product_family = Category.objects.create(
+            name="Socks",
+            slug="socks",
+            taxonomy_group=Category.TAXONOMY_PRODUCT_FAMILY,
+        )
+        self.audience = Category.objects.create(
+            name="Women",
+            slug="women",
+            taxonomy_group=Category.TAXONOMY_AUDIENCE,
+        )
+        self.category = Category.objects.create(
+            parent=self.product_family,
+            name="Calf",
+            slug="calf",
+            taxonomy_group=Category.TAXONOMY_HEIGHT,
+        )
         self.product = Product.objects.create(
             name="Kofora Premium Crew",
             slug="kofora-premium-crew",
@@ -131,7 +146,7 @@ class E2ECheckoutLifecycleTests(APITestCase):
             is_active=True,
             is_published=True,
         )
-        self.product.categories.add(self.category)
+        self.product.categories.add(self.product_family, self.audience, self.category)
         self.variant = ProductVariant.objects.create(
             product=self.product,
             sku="KOF-CRW-BLK-M",
@@ -425,6 +440,7 @@ class E2ECheckoutLifecycleTests(APITestCase):
                 "base_currency": "USD",
                 "is_active": True,
                 "is_published": True,
+                "categories": [self.product_family.id, self.audience.id, self.category.id],
             },
             format="json",
         )
@@ -439,6 +455,7 @@ class E2ECheckoutLifecycleTests(APITestCase):
                 "base_currency": "USD",
                 "is_active": True,
                 "is_published": True,
+                "categories": [self.product_family.id, self.audience.id, self.category.id],
             },
             format="json",
         )

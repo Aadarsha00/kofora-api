@@ -14,20 +14,59 @@ ROOT_CATEGORIES = [
 ]
 
 SOCK_HEIGHTS = [
-    {"slug": "no-show", "name": "No-show", "sort_order": 10, "aliases": []},
+    {"slug": "no-show", "name": "No Show", "sort_order": 10, "aliases": []},
     {"slug": "ankle", "name": "Ankle", "sort_order": 20, "aliases": ["ankel"]},
     {"slug": "quarter", "name": "Quarter", "sort_order": 30, "aliases": []},
-    {"slug": "crew-socks", "name": "Crew", "sort_order": 40, "aliases": ["crew"]},
-    {"slug": "half-calf", "name": "Half-calf", "sort_order": 50, "aliases": []},
-    {"slug": "calf", "name": "Calf", "sort_order": 60, "aliases": []},
-    {"slug": "knee-high", "name": "Knee-high", "sort_order": 70, "aliases": []},
+    {"slug": "half-calf", "name": "Half Calf", "sort_order": 40, "aliases": []},
+    {
+        "slug": "calf",
+        "name": "Calf",
+        "sort_order": 50,
+        "aliases": ["mid-calf", "crew", "crew-socks"],
+    },
+    {"slug": "knee-high", "name": "Knee High", "sort_order": 60, "aliases": ["over-the-calf"]},
 ]
 
-SOCK_PURPOSES = [
-    {"slug": "casual", "name": "Casual", "sort_order": 110, "aliases": []},
-    {"slug": "formal", "name": "Formal", "sort_order": 120, "aliases": ["formals"]},
-    {"slug": "sports", "name": "Sports", "sort_order": 130, "aliases": []},
-    {"slug": "compression", "name": "Compression", "sort_order": 140, "aliases": []},
+COLLECTIONS = [
+    {
+        "slug": "casual",
+        "name": "Casual",
+        "sort_order": 110,
+        "aliases": ["socks-casual", "socks-everyday", "caps-everyday", "caps-lifestyle", "caps-travel"],
+    },
+    {
+        "slug": "sport",
+        "name": "Sport",
+        "sort_order": 120,
+        "aliases": [
+            "sports",
+            "socks-athletic",
+            "socks-running",
+            "socks-performance",
+            "caps-running",
+            "caps-performance",
+            "caps-outdoor",
+        ],
+    },
+    {
+        "slug": "compression",
+        "name": "Compression",
+        "sort_order": 130,
+        "aliases": ["socks-compression"],
+    },
+    {"slug": "grippers", "name": "Grippers", "sort_order": 140, "aliases": []},
+    {
+        "slug": "dressy",
+        "name": "Dressy",
+        "sort_order": 150,
+        "aliases": ["formal", "formals", "socks-dress"],
+    },
+    {
+        "slug": "cozy",
+        "name": "Cozy",
+        "sort_order": 160,
+        "aliases": ["socks-outdoor", "socks-merino-wool"],
+    },
 ]
 
 
@@ -125,6 +164,7 @@ class Command(BaseCommand):
         socks = roots["socks"]
 
         sock_signal_ids = {socks.id}
+        active_taxonomy_ids = set()
         moved_alias_products = 0
         for item in SOCK_HEIGHTS:
             category, moved = self._ensure_sock_child(
@@ -136,9 +176,10 @@ class Command(BaseCommand):
                 Category.TAXONOMY_HEIGHT,
             )
             sock_signal_ids.add(category.id)
+            active_taxonomy_ids.add(category.id)
             moved_alias_products += moved
 
-        for item in SOCK_PURPOSES:
+        for item in COLLECTIONS:
             category, moved = self._ensure_sock_child(
                 socks,
                 item["slug"],
@@ -148,7 +189,14 @@ class Command(BaseCommand):
                 Category.TAXONOMY_PURPOSE,
             )
             sock_signal_ids.add(category.id)
+            active_taxonomy_ids.add(category.id)
             moved_alias_products += moved
+
+        obsolete_taxonomy = Category.objects.filter(
+            taxonomy_group__in=[Category.TAXONOMY_HEIGHT, Category.TAXONOMY_PURPOSE],
+            is_active=True,
+        ).exclude(pk__in=active_taxonomy_ids)
+        deactivated = obsolete_taxonomy.update(is_active=False)
 
         tagged_products = 0
         for product in Product.objects.filter(categories__id__in=sock_signal_ids).distinct():
@@ -160,6 +208,7 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 "Sock taxonomy synced. "
                 f"Alias product links moved: {moved_alias_products}. "
+                f"Options deactivated: {deactivated}. "
                 f"Products tagged with socks: {tagged_products}."
             )
         )

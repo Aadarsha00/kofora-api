@@ -132,6 +132,7 @@ class Command(BaseCommand):
             slug="socks",
             defaults={
                 "name": "Socks",
+                "taxonomy_group": Category.TAXONOMY_PRODUCT_FAMILY,
                 "description": "All socks",
                 "is_active": True,
                 "sort_order": 1,
@@ -142,15 +143,16 @@ class Command(BaseCommand):
             },
         )
         category, _ = Category.objects.get_or_create(
-            slug="crew-socks",
+            slug="calf",
             defaults={
                 "parent": parent_category,
-                "name": "Crew Socks",
-                "description": "Crew length premium socks",
+                "name": "Calf",
+                "taxonomy_group": Category.TAXONOMY_HEIGHT,
+                "description": "Calf height premium socks",
                 "is_active": True,
                 "sort_order": 2,
-                "seo_title": "Crew Socks",
-                "seo_description": "Crew style socks",
+                "seo_title": "Calf Socks",
+                "seo_description": "Calf height socks",
                 "created_by": admin_user,
                 "updated_by": admin_user,
             },

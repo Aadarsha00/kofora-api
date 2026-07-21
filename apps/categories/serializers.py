@@ -11,6 +11,11 @@ def _absolute_image_url(serializer, obj):
     return request.build_absolute_uri(url) if request else url
 
 
+def _available_audiences(serializer, obj):
+    availability = serializer.context.get("category_audience_availability", {})
+    return sorted(availability.get(obj.id, ()))
+
+
 class CategoryChildSerializer(serializers.ModelSerializer):
     """Recursive serializer for nested categories"""
     parent = serializers.SlugRelatedField(
@@ -18,6 +23,7 @@ class CategoryChildSerializer(serializers.ModelSerializer):
     )
     children = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    available_audiences = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
@@ -33,6 +39,7 @@ class CategoryChildSerializer(serializers.ModelSerializer):
             "seo_title",
             "seo_description",
             "image",
+            "available_audiences",
             "children",
         )
 
@@ -43,6 +50,9 @@ class CategoryChildSerializer(serializers.ModelSerializer):
     def get_image(self, obj):
         return _absolute_image_url(self, obj)
 
+    def get_available_audiences(self, obj):
+        return _available_audiences(self, obj)
+
 
 class CategorySerializer(serializers.ModelSerializer):
     parent = serializers.SlugRelatedField(
@@ -50,6 +60,7 @@ class CategorySerializer(serializers.ModelSerializer):
     )
     children = serializers.SerializerMethodField()
     image = serializers.ImageField(required=False, allow_null=True, use_url=True)
+    available_audiences = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
@@ -65,12 +76,16 @@ class CategorySerializer(serializers.ModelSerializer):
             "seo_title",
             "seo_description",
             "image",
+            "available_audiences",
             "children",
         )
 
     def get_children(self, obj):
         children = obj.children.filter(is_active=True)
         return CategoryChildSerializer(children, many=True, context=self.context).data
+
+    def get_available_audiences(self, obj):
+        return _available_audiences(self, obj)
 
     def validate(self, attrs):
         taxonomy_group = attrs.get("taxonomy_group", getattr(self.instance, "taxonomy_group", ""))
