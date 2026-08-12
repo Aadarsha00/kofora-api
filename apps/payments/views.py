@@ -190,8 +190,8 @@ class PayPalWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        signature = request.headers.get("PayPal-Transmission-Sig", "")
-        verified = verify_paypal_signature(signature)
+        signature = request.headers.get("Paypal-Transmission-Sig", "")
+        verified = verify_paypal_signature(request.headers, request.body.decode("utf-8"))
         if not verified:
             return api_error("Invalid webhook signature")
         event_id = request.data.get("id", "")

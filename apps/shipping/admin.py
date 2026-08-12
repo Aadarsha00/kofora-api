@@ -17,8 +17,9 @@ class ShippingZoneAdmin(admin.ModelAdmin):
 
 @admin.register(ShippingMethod)
 class ShippingMethodAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "code", "zone", "base_rate", "is_active")
+    list_display = ("id", "name", "code", "zone", "base_rate", "ups_service_code", "is_active")
     list_filter = ("is_active", "zone")
+    list_editable = ("ups_service_code",)
     search_fields = ("name", "code")
     inlines = [ShippingRateRuleInline]
 

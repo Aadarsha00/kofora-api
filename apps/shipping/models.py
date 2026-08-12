@@ -24,6 +24,9 @@ class ShippingMethod(TimeStampedModel):
     name = models.CharField(max_length=120)
     code = models.SlugField(max_length=60, unique=True)
     base_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    # UPS service code (e.g. "03" = Ground). When set, checkout prices this
+    # method from a live UPS rate and treats base_rate as the fallback.
+    ups_service_code = models.CharField(max_length=3, blank=True, default="")
     free_shipping_threshold = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     is_active = models.BooleanField(default=True)
 

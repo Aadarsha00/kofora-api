@@ -1,4 +1,5 @@
 from decimal import Decimal
+from urllib.parse import urlparse
 
 import paypalrestsdk
 import stripe
@@ -305,9 +306,36 @@ def verify_stripe_signature(payload: bytes, signature: str) -> bool:
         return False
 
 
-def verify_paypal_signature(signature: str) -> bool:
-    # PayPal verification requires API call with transmission headers.
-    return bool(signature)
+def verify_paypal_signature(headers, raw_body: str) -> bool:
+    """Cryptographically verify a PayPal webhook: fetch the signing cert PayPal
+    points at, confirm it's actually PayPal's (chain of trust + *.paypal.com
+    common name), then verify the RSA signature over this exact payload."""
+    webhook_id = settings.PAYPAL_WEBHOOK_ID
+    if not webhook_id:
+        return False
+
+    transmission_id = headers.get("Paypal-Transmission-Id", "")
+    timestamp = headers.get("Paypal-Transmission-Time", "")
+    cert_url = headers.get("Paypal-Cert-Url", "")
+    auth_algo = headers.get("Paypal-Auth-Algo", "")
+    actual_sig = headers.get("Paypal-Transmission-Sig", "")
+    if not all([transmission_id, timestamp, cert_url, auth_algo, actual_sig]):
+        return False
+
+    # Reject before fetching: don't let a forged request point cert_url at an
+    # attacker-controlled server. PayPal always serves its own certs from here.
+    parsed_cert_url = urlparse(cert_url)
+    if parsed_cert_url.scheme != "https" or not parsed_cert_url.netloc.endswith(".paypal.com"):
+        return False
+
+    try:
+        return bool(
+            paypalrestsdk.WebhookEvent.verify(
+                transmission_id, timestamp, webhook_id, raw_body, cert_url, actual_sig, auth_algo
+            )
+        )
+    except Exception:
+        return False
 
 
 @transaction.atomic

@@ -185,6 +185,33 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "")
 PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "")
 PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")
+# From the specific webhook registered at developer.paypal.com > Apps > Webhooks -
+# required to verify inbound webhook signatures.
+PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID", "")
+
+# Only the exact string "production" reaches the billable UPS host; anything
+# else (unset, typo, empty) resolves to the CIE sandbox.
+UPS_MODE = os.getenv("UPS_MODE", "sandbox")
+UPS_BASE_URL = "https://onlinetools.ups.com" if UPS_MODE == "production" else "https://wwwcie.ups.com"
+UPS_CLIENT_ID = os.getenv("UPS_CLIENT_ID", "")
+UPS_CLIENT_SECRET = os.getenv("UPS_CLIENT_SECRET", "")
+UPS_ACCOUNT_NUMBER = os.getenv("UPS_ACCOUNT_NUMBER", "")
+UPS_TRANSACTION_SRC = os.getenv("UPS_TRANSACTION_SRC", "kofora")
+
+UPS_SHIPPER_NAME = os.getenv("UPS_SHIPPER_NAME", "Kofora")
+UPS_SHIPPER_ADDRESS_LINE = os.getenv("UPS_SHIPPER_ADDRESS_LINE", "")
+UPS_SHIPPER_CITY = os.getenv("UPS_SHIPPER_CITY", "")
+UPS_SHIPPER_STATE = os.getenv("UPS_SHIPPER_STATE", "")
+UPS_SHIPPER_POSTAL_CODE = os.getenv("UPS_SHIPPER_POSTAL_CODE", "")
+UPS_SHIPPER_COUNTRY = os.getenv("UPS_SHIPPER_COUNTRY", "US")
+UPS_WEIGHT_UNIT = os.getenv("UPS_WEIGHT_UNIT", "LBS")
+UPS_DIMENSION_UNIT = os.getenv("UPS_DIMENSION_UNIT", "IN")
+
+# Live-rate checkout: per-item weight fallback when a variant has no weight_grams,
+# the package weight floor UPS bills against, and how long a quote is cached.
+UPS_DEFAULT_ITEM_WEIGHT_GRAMS = int(os.getenv("UPS_DEFAULT_ITEM_WEIGHT_GRAMS", "150"))
+UPS_MIN_PACKAGE_WEIGHT_LBS = os.getenv("UPS_MIN_PACKAGE_WEIGHT_LBS", "1")
+UPS_RATE_CACHE_SECONDS = int(os.getenv("UPS_RATE_CACHE_SECONDS", "3600"))
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
