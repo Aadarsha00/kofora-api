@@ -12,6 +12,19 @@ from apps.products.models import Product, ProductImage, ProductVariant
 
 ASSETS_DIR = Path(settings.BASE_DIR) / "seed_assets" / "socks"
 
+# seed_data.py only creates a handful of sock subcategories - these three height
+# and two purpose categories are specific to the products below, so this seed
+# creates them itself (get_or_create) rather than assuming they already exist.
+HEIGHT_CATEGORIES = {
+    "no-show": "No Show",
+    "crew-socks": "Crew",
+    "knee-high": "Knee High",
+}
+PURPOSE_CATEGORIES = {
+    "casual": "Casual",
+    "compression": "Compression",
+}
+
 # Each product below has exactly one real product photo, so sizes (not colors)
 # are the variant axis - listing invented colorways with no matching photo is
 # the exact mismatch problem this seed replaces.
@@ -124,13 +137,35 @@ class Command(BaseCommand):
                 },
             )
 
+        height_categories = {}
+        for slug, name in HEIGHT_CATEGORIES.items():
+            height_categories[slug], _ = Category.objects.get_or_create(
+                slug=slug,
+                defaults={
+                    "parent": socks_category,
+                    "name": name,
+                    "taxonomy_group": Category.TAXONOMY_HEIGHT,
+                    "is_active": True,
+                    **audit,
+                },
+            )
+
+        purpose_categories = {}
+        for slug, name in PURPOSE_CATEGORIES.items():
+            purpose_categories[slug], _ = Category.objects.get_or_create(
+                slug=slug,
+                defaults={
+                    "parent": socks_category,
+                    "name": name,
+                    "taxonomy_group": Category.TAXONOMY_PURPOSE,
+                    "is_active": True,
+                    **audit,
+                },
+            )
+
         for spec in SOCK_PRODUCTS:
-            style_category = Category.objects.filter(slug=spec["style"], parent=socks_category).first()
-            if style_category is None:
-                raise CommandError(f"Missing expected sock height category: {spec['style']}")
-            purpose_category = Category.objects.filter(slug=spec["purpose"], parent=socks_category).first()
-            if purpose_category is None:
-                raise CommandError(f"Missing expected sock purpose category: {spec['purpose']}")
+            style_category = height_categories[spec["style"]]
+            purpose_category = purpose_categories[spec["purpose"]]
 
             product, product_created = Product.objects.get_or_create(
                 slug=spec["slug"],
