@@ -12,17 +12,28 @@ from apps.products.models import Product, ProductImage, ProductVariant
 
 ASSETS_DIR = Path(settings.BASE_DIR) / "seed_assets" / "socks"
 
-# seed_data.py only creates a handful of sock subcategories - these three height
-# and two purpose categories are specific to the products below, so this seed
-# creates them itself (get_or_create) rather than assuming they already exist.
+# seed_data.py only creates a handful of sock subcategories - these height and
+# purpose categories are specific to the products below, so this seed creates
+# them itself (get_or_create) rather than assuming they already exist. "calf"
+# is the exception: seed_data.py already created it (for its own throwaway
+# demo product, since removed), so this just adopts the existing category and
+# finally gives it a real product.
 HEIGHT_CATEGORIES = {
     "no-show": "No Show",
     "crew-socks": "Crew",
     "knee-high": "Knee High",
+    "ankle": "Ankle",
+    "quarter": "Quarter",
+    "half-calf": "Half Calf",
+    "calf": "Calf",
 }
 PURPOSE_CATEGORIES = {
     "casual": "Casual",
     "compression": "Compression",
+    "sport": "Sport",
+    "grippers": "Grippers",
+    "dressy": "Dressy",
+    "cozy": "Cozy",
 }
 
 # Each product below has exactly one real product photo, so sizes (not colors)
@@ -32,6 +43,14 @@ SIZE_VARIANTS = (
     {"label": "Small (6-8)", "suffix": "S", "stock": 60},
     {"label": "Medium (9-11)", "suffix": "M", "stock": 90},
     {"label": "Large (12-14)", "suffix": "L", "stock": 50},
+)
+
+# Kids' shoe sizing is a different scale entirely - adult "Small (6-8)" would
+# be actively misleading on a children's product.
+KIDS_SIZE_VARIANTS = (
+    {"label": "Small (Toddler 4-7)", "suffix": "S", "stock": 70},
+    {"label": "Medium (Kids 8-12)", "suffix": "M", "stock": 100},
+    {"label": "Large (Kids 13-3)", "suffix": "L", "stock": 60},
 )
 
 SOCK_PRODUCTS = (
@@ -97,6 +116,113 @@ SOCK_PRODUCTS = (
         "weight_grams": 80,
         "sku_prefix": "KOF-SCK-KH-WHT",
         "image": ("knee-high-white-1.webp", "White graduated-compression knee-high sock"),
+    },
+    {
+        "slug": "kofora-sheer-ankle-sock",
+        "name": "Kofora Sheer Ankle Sock",
+        "short_description": "Lightweight ankle-length sock with a barely-there feel.",
+        "full_description": (
+            "A fine-knit ankle sock that sits just above the anklebone. Sheer enough to layer "
+            "under trousers, substantial enough for daily wear."
+        ),
+        "is_featured": False,
+        "style": "ankle",
+        "purpose": "casual",
+        "audiences": ("women", "unisex"),
+        "color": "Navy",
+        "color_hex": "#1a1f36",
+        "price": "13.99",
+        "compare_at_price": "17.99",
+        "cost_price": "5.75",
+        "weight_grams": 55,
+        "sku_prefix": "KOF-SCK-AK-NVY",
+        "image": ("ankle-navy-1.webp", "Navy ankle-length sock worn on crossed legs"),
+    },
+    {
+        "slug": "kofora-active-quarter-sock",
+        "name": "Kofora Active Quarter Sock",
+        "short_description": "Ribbed quarter-length sock built for everyday movement.",
+        "full_description": (
+            "A cushioned quarter-length sock in a ribbed knit, cut just above the ankle bone. "
+            "Breathable and durable enough for workouts, still clean enough for everyday wear."
+        ),
+        "is_featured": False,
+        "style": "quarter",
+        "purpose": "sport",
+        "audiences": ("men", "women", "unisex"),
+        "color": "White",
+        "color_hex": "#f4f4f4",
+        "price": "15.99",
+        "compare_at_price": "19.99",
+        "cost_price": "6.50",
+        "weight_grams": 65,
+        "sku_prefix": "KOF-SCK-QT-WHT",
+        "image": ("quarter-white-1.webp", "White ribbed quarter-length sock being pulled on"),
+    },
+    {
+        "slug": "kofora-pinstripe-half-calf-sock",
+        "name": "Kofora Pinstripe Half-Calf Sock",
+        "short_description": "Fine pinstripe dress sock in a mid-calf length.",
+        "full_description": (
+            "A fine-gauge pinstripe sock in a mid-calf length, made to disappear under tailored "
+            "trousers. The dress-sock finish your good shoes deserve."
+        ),
+        "is_featured": False,
+        "style": "half-calf",
+        "purpose": "dressy",
+        "audiences": ("men",),
+        "color": "Brown",
+        "color_hex": "#4a3728",
+        "price": "17.99",
+        "compare_at_price": "22.99",
+        "cost_price": "7.50",
+        "weight_grams": 70,
+        "sku_prefix": "KOF-SCK-HC-BRN",
+        "image": ("halfcalf-pinstripe-1.jpg", "Brown pinstripe half-calf dress sock worn with tailored pants"),
+    },
+    {
+        "slug": "kofora-cozy-calf-sock",
+        "name": "Kofora Cozy Calf Sock",
+        "short_description": "Plush ribbed sock in a relaxed calf length.",
+        "full_description": (
+            "A soft, plush ribbed sock in a relaxed calf-length fit. Made for slow mornings, "
+            "worn-in sneakers, and staying in just a little longer."
+        ),
+        "is_featured": False,
+        "style": "calf",
+        "purpose": "cozy",
+        "audiences": ("men", "women", "unisex"),
+        "color": "White",
+        "color_hex": "#f4f4f4",
+        "price": "16.99",
+        "compare_at_price": "20.99",
+        "cost_price": "6.75",
+        "weight_grams": 75,
+        "sku_prefix": "KOF-SCK-CZ-WHT",
+        "image": ("cozy-calf-white-1.webp", "Plush white ribbed calf sock worn with a sneaker"),
+    },
+    {
+        "slug": "kofora-kids-gripper-sock",
+        "name": "Kofora Kids Gripper Sock",
+        "short_description": "Knee-high gripper sock with non-slip soles, sized for kids.",
+        "full_description": (
+            "A colorful knee-high sock with grip dots on the sole to keep little feet steady on "
+            "hardwood and tile. Soft, stretchy, and built for climbing on furniture they're not "
+            "supposed to climb on."
+        ),
+        "is_featured": False,
+        "style": "knee-high",
+        "purpose": "grippers",
+        "audiences": ("kids",),
+        "color": "Chevron Multi",
+        "color_hex": "#8b1e3f",
+        "price": "12.99",
+        "compare_at_price": "15.99",
+        "cost_price": "5.25",
+        "weight_grams": 50,
+        "sku_prefix": "KOF-SCK-GR-MLT",
+        "size_variants": KIDS_SIZE_VARIANTS,
+        "image": ("kids-gripper-1.webp", "Child wearing colorful chevron-pattern knee-high gripper socks"),
     },
 )
 
@@ -190,7 +316,7 @@ class Command(BaseCommand):
                 *(audiences[a] for a in spec["audiences"]),
             )
 
-            for size_spec in SIZE_VARIANTS:
+            for size_spec in spec.get("size_variants", SIZE_VARIANTS):
                 ProductVariant.objects.get_or_create(
                     sku=f"{spec['sku_prefix']}-{size_spec['suffix']}",
                     defaults={
