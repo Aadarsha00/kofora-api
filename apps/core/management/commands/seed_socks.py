@@ -67,7 +67,9 @@ SOCK_PRODUCTS = (
         "is_featured": True,
         "style": "crew-socks",
         "purpose": "casual",
-        "audiences": ("men", "women", "unisex"),
+        # Photo shows a slender, hairless leg with no male markers - women/unisex
+        # only, not "men", since the audience tag should match what's shown.
+        "audiences": ("women", "unisex"),
         "color": "Mustard Stripe",
         "color_hex": "#d9a520",
         "price": "16.99",
@@ -88,7 +90,9 @@ SOCK_PRODUCTS = (
         "is_featured": False,
         "style": "knee-high",
         "purpose": "compression",
-        "audiences": ("men", "women"),
+        # Photo is unambiguously a male model (visible leg hair) - tagging this
+        # "women" too would misrepresent what the product photo actually shows.
+        "audiences": ("men",),
         "color": "White",
         "color_hex": "#f4f4f4",
         "price": "18.99",
