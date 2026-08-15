@@ -105,7 +105,11 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-MEDIA_URL = "/media/"
+# Absolute so image URLs are always public-facing, regardless of whether the
+# request that generated them came in via nginx or straight over the internal
+# Docker network (e.g. backend:8000) - a relative MEDIA_URL would otherwise
+# get resolved against whatever Host header that particular request carried.
+MEDIA_URL = os.getenv("MEDIA_URL", "/media/")
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
