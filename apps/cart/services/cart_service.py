@@ -3,8 +3,9 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 
 from apps.discounts.services.discount_service import apply_coupon_to_amount
+from apps.shipping.models import ShippingMethod
 from apps.shipping.services.ups_client import UPSError
-from apps.shipping.services.ups_service import get_rate_for_service
+from apps.shipping.services.ups_service import get_rate_for_service, get_rates
 
 from ..models import Cart
 
@@ -97,6 +98,55 @@ def resolve_shipping_amount(cart: Cart) -> Decimal:
         )
     except UPSError:
         return method.base_rate
+
+
+def _address_destination(address):
+    return {
+        "full_name": address.full_name,
+        "address_line_1": address.address_line_1,
+        "address_line_2": address.address_line_2,
+        "city": address.city,
+        "state_province": address.state_province,
+        "postal_code": address.postal_code,
+        "country": address.country,
+    }
+
+
+def get_live_shipping_quotes(cart: Cart, address):
+    """Live UPS price for every shipping method the store offers, quoted against
+    a specific address in one UPS "Shop" call.
+
+    Raises UPSError if UPS can't be reached or rejects the address outright -
+    the caller should surface that honestly rather than substituting a flat
+    rate, since a made-up number here is a price a customer will act on.
+    Methods with no ups_service_code, or that UPS didn't price, are omitted
+    rather than filled in with a guess.
+    """
+    destination = _address_destination(address)
+    domestic = (destination.get("country") or "").upper() == settings.UPS_SHIPPER_COUNTRY.upper()
+    if not domestic:
+        return []
+
+    packages = [{"weight": str(_cart_weight_lbs(cart))}]
+    live_rates = get_rates(destination, packages, request_option="Shop")
+    live_by_service = {r["service_code"]: r["total_charge"] for r in live_rates if r["total_charge"] is not None}
+
+    subtotal = _cart_subtotal(cart)
+    quotes = []
+    for method in ShippingMethod.objects.filter(is_active=True).exclude(ups_service_code=""):
+        charge = live_by_service.get(method.ups_service_code)
+        if charge is None:
+            continue
+        free = bool(method.free_shipping_threshold and subtotal >= method.free_shipping_threshold)
+        quotes.append({
+            "method_id": method.id,
+            "name": method.name,
+            "code": method.code,
+            "rate": Decimal("0.00") if free else _money(charge),
+            "free": free,
+        })
+
+    return sorted(quotes, key=lambda q: q["rate"])
 
 
 def calculate_cart_totals(cart: Cart):

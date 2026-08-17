@@ -11,6 +11,7 @@ from .views import (
     SetBillingAddressView,
     SetShippingAddressView,
     SetShippingMethodView,
+    ShippingRatesView,
 )
 
 urlpatterns = [
@@ -21,6 +22,7 @@ urlpatterns = [
     path("merge-guest/", MergeGuestCartView.as_view(), name="cart-merge-guest"),
     path("shipping-method/", SetShippingMethodView.as_view(), name="cart-shipping-method"),
     path("shipping-address/", SetShippingAddressView.as_view(), name="cart-shipping-address"),
+    path("shipping-rates/", ShippingRatesView.as_view(), name="cart-shipping-rates"),
     path("billing-address/", SetBillingAddressView.as_view(), name="cart-billing-address"),
     path("apply-coupon/", ApplyCouponView.as_view(), name="cart-apply-coupon"),
     path("remove-coupon/", RemoveCouponView.as_view(), name="cart-remove-coupon"),
