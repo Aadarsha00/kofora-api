@@ -2,6 +2,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 
+from apps.discounts.services.bogo_selector import best_bogo_for_cart
 from apps.discounts.services.discount_service import apply_coupon_to_amount
 from apps.shipping.services.ups_client import UPSError
 from apps.shipping.services.ups_service import get_rate_for_service
@@ -102,10 +103,33 @@ def resolve_shipping_amount(cart: Cart) -> Decimal:
 def calculate_cart_totals(cart: Cart):
     subtotal = _cart_subtotal(cart)
 
-    discount = Decimal("0.00")
+    coupon_discount = Decimal("0.00")
     if cart.applied_coupon:
-        discount = apply_coupon_to_amount(cart.applied_coupon, subtotal)
-    discount = _money(discount)
+        coupon_discount = apply_coupon_to_amount(cart.applied_coupon, subtotal)
+    coupon_discount = _money(coupon_discount)
+
+    # Auto-applied buy-X-get-Y offers are recomputed from the cart's current
+    # contents on every call, so they cannot go stale when quantities change.
+    bogo_discount_obj, bogo_result = best_bogo_for_cart(cart, subtotal, getattr(cart, "user", None))
+    bogo_discount = bogo_result.discount_amount if bogo_result else Decimal("0.00")
+
+    # Stacking policy: a coupon and a bogo offer combine only when both opt in
+    # via is_stackable. Otherwise the shopper gets whichever is worth more.
+    if coupon_discount and bogo_discount:
+        coupon_stackable = cart.applied_coupon.discount.is_stackable
+        bogo_stackable = bogo_discount_obj.is_stackable if bogo_discount_obj else False
+        if coupon_stackable and bogo_stackable:
+            discount = coupon_discount + bogo_discount
+        else:
+            discount = max(coupon_discount, bogo_discount)
+            if bogo_discount < coupon_discount:
+                bogo_result = None
+    else:
+        discount = coupon_discount + bogo_discount
+
+    # A discount can never exceed the value of the goods; without this a large
+    # flat coupon stacked on a bogo could drive the taxable base negative.
+    discount = _money(min(discount, subtotal))
 
     shipping = _money(resolve_shipping_amount(cart))
 
@@ -116,6 +140,7 @@ def calculate_cart_totals(cart: Cart):
     return {
         "subtotal": subtotal,
         "discount_amount": discount,
+        "bogo": _bogo_summary(bogo_discount_obj, bogo_result),
         "shipping_amount": shipping,
         "tax_amount": tax,
         "grand_total": total,
@@ -123,4 +148,22 @@ def calculate_cart_totals(cart: Cart):
         "shipping": shipping,
         "tax": tax,
         "total": total,
+    }
+
+
+def _bogo_summary(discount, result):
+    """Shape the applied offer for the cart API, or None when nothing applies."""
+    if not discount or not result or not result.applies:
+        return None
+
+    return {
+        "discount_id": discount.id,
+        "name": discount.name,
+        "buy_quantity": discount.buy_quantity,
+        "get_quantity": discount.get_quantity,
+        "reward_percentage": discount.reward_percentage,
+        "free_units": result.free_units,
+        "applications": result.applications,
+        "amount": result.discount_amount,
+        "line_allocations": {key: str(value) for key, value in result.line_allocations.items()},
     }

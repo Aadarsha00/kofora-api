@@ -6,8 +6,13 @@ from decimal import Decimal, InvalidOperation
 from apps.core.permissions import ReadOnlyOrAdminStaff
 from apps.core.responses import api_error, api_success
 
-from .models import CouponCode, Discount
-from .serializers import CouponCodeSerializer, DiscountSerializer
+from .models import CouponCode, Discount, DiscountRule
+from .serializers import (
+    CouponCodeSerializer,
+    DiscountRuleSerializer,
+    DiscountSerializer,
+    PublicOfferSerializer,
+)
 from .services.discount_service import (
     apply_coupon_to_amount,
     validate_coupon_for_user,
@@ -25,6 +30,22 @@ class DiscountViewSet(viewsets.ModelViewSet):
     filterset_fields = ("is_active", "discount_type", "is_auto_applied")
     search_fields = ("name",)
     ordering_fields = ("created_at", "name")
+
+
+class DiscountRuleViewSet(viewsets.ModelViewSet):
+    """Scope rows for a discount: which products/categories qualify, and which
+    can be handed over as the reward."""
+
+    permission_classes = [ReadOnlyOrAdminStaff]
+    serializer_class = DiscountRuleSerializer
+    filterset_fields = ("discount", "role")
+
+    def get_queryset(self):
+        return (
+            DiscountRule.objects.select_related("product", "category", "bundle")
+            .all()
+            .order_by("id")
+        )
 
 
 class CouponCodeViewSet(viewsets.ModelViewSet):
@@ -131,3 +152,31 @@ class FirstOrderDiscountApplyView(APIView):
             return api_error(message)
 
         return api_success(message, CartSerializer(cart).data)
+
+
+class ActiveOfferListView(APIView):
+    """Auto-applied offers currently running, for storefront badges and banners.
+
+    Public and read-only: it exposes the shape of an offer (buy 2 get 1 free on
+    these products) but never coupon codes or usage counts.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from django.db.models import Q
+        from django.utils import timezone
+
+        now = timezone.now()
+        offers = (
+            Discount.objects.filter(
+                discount_type=Discount.TYPE_BOGO,
+                is_active=True,
+                is_auto_applied=True,
+            )
+            .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=now))
+            .filter(Q(expires_at__isnull=True) | Q(expires_at__gte=now))
+            .prefetch_related("rules")
+            .order_by("-created_at")
+        )
+        return api_success("Active offers retrieved", PublicOfferSerializer(offers, many=True).data)
