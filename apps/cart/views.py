@@ -8,10 +8,11 @@ from apps.discounts.models import CouponCode
 from apps.discounts.services.discount_service import validate_coupon_for_user
 from apps.products.models import ProductVariant
 from apps.shipping.models import ShippingMethod
+from apps.shipping.services.ups_client import UPSError
 
 from .models import Cart, CartVariantItem
 from .serializers import CartSerializer
-from .services.cart_service import calculate_cart_totals
+from .services.cart_service import calculate_cart_totals, get_live_shipping_quotes
 
 
 def _positive_int(value, field_name: str, default=None):
@@ -333,3 +334,34 @@ class RemoveCouponView(APIView):
         cart.save(update_fields=["applied_coupon", "applied_discount_claim", "updated_at"])
 
         return _cart_response(request, "Coupon removed successfully", cart)
+
+
+class ShippingRatesView(APIView):
+    """Live UPS price for every shipping method, quoted against a given
+    address - lets checkout show real prices for all options before the
+    customer picks one, instead of only for whichever one happens to already
+    be synced onto the cart.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        address_id, error = _positive_int(request.query_params.get("address_id"), "address_id")
+        if error:
+            return error
+
+        address = Address.objects.filter(id=address_id, user=request.user, is_active=True).first()
+        if not address:
+            return api_error("Address not found", status_code=status.HTTP_404_NOT_FOUND)
+
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+
+        try:
+            quotes = get_live_shipping_quotes(cart, address)
+        except UPSError:
+            return api_error(
+                "Live shipping rates are temporarily unavailable. Please try again in a moment.",
+                status_code=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return api_success("Shipping rates fetched successfully", {"rates": quotes})
