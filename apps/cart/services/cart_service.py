@@ -15,6 +15,11 @@ WEIGHT_QUANT = Decimal("0.1")
 TAX_RATE = Decimal("0.08")
 GRAMS_PER_LB = Decimal("453.59237")
 
+# Countries the storefront actually collects addresses for (matches the
+# frontend's Places Autocomplete includedRegionCodes) and that get a live UPS
+# quote here - everything else falls back to the method's flat base_rate.
+LIVE_RATE_COUNTRIES = {"US", "CA"}
+
 
 def _money(value: Decimal) -> Decimal:
     return value.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
@@ -67,9 +72,9 @@ def resolve_shipping_amount(cart: Cart) -> Decimal:
 
     Free once the subtotal reaches the method's free_shipping_threshold.
     Otherwise: when the method is mapped to a UPS service and the cart has a
-    domestic destination, this is a live UPS quote; otherwise (no method, no
-    address, international, or any UPS failure) it falls back to the method's
-    base_rate.
+    destination in LIVE_RATE_COUNTRIES, this is a live UPS quote; otherwise
+    (no method, no address, unsupported destination, or any UPS failure) it
+    falls back to the method's base_rate.
     """
     method = cart.shipping_method
     if not method:
@@ -83,11 +88,8 @@ def resolve_shipping_amount(cart: Cart) -> Decimal:
         return method.base_rate
 
     destination = _cart_destination(cart)
-    domestic = destination and (
-        (destination.get("country") or "").upper()
-        == settings.UPS_SHIPPER_COUNTRY.upper()
-    )
-    if not domestic:
+    rateable = destination and (destination.get("country") or "").upper() in LIVE_RATE_COUNTRIES
+    if not rateable:
         return method.base_rate
 
     try:
@@ -123,8 +125,8 @@ def get_live_shipping_quotes(cart: Cart, address):
     rather than filled in with a guess.
     """
     destination = _address_destination(address)
-    domestic = (destination.get("country") or "").upper() == settings.UPS_SHIPPER_COUNTRY.upper()
-    if not domestic:
+    rateable = (destination.get("country") or "").upper() in LIVE_RATE_COUNTRIES
+    if not rateable:
         return []
 
     packages = [{"weight": str(_cart_weight_lbs(cart))}]
