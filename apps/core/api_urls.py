@@ -21,4 +21,5 @@ urlpatterns = [
     path("contact/", include("apps.contact.urls")),
     path("site-images/", include("apps.content.urls")),
     path("homepage-tiles/", include("apps.content.homepage_urls")),
+    path("collabs/", include("apps.content.collab_urls")),
 ]

@@ -10,6 +10,7 @@ ROOT_CATEGORIES = [
     {"slug": "women", "name": "Women", "sort_order": 20, "taxonomy_group": Category.TAXONOMY_AUDIENCE},
     {"slug": "men", "name": "Men", "sort_order": 30, "taxonomy_group": Category.TAXONOMY_AUDIENCE},
     {"slug": "kids", "name": "Kids", "sort_order": 40, "taxonomy_group": Category.TAXONOMY_AUDIENCE},
+    {"slug": "teens", "name": "Teens", "sort_order": 45, "taxonomy_group": Category.TAXONOMY_AUDIENCE},
     {"slug": "unisex", "name": "Unisex", "sort_order": 50, "taxonomy_group": Category.TAXONOMY_AUDIENCE},
 ]
 
