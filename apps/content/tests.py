@@ -17,7 +17,7 @@ class HomepageTileApiTests(TestCase):
 
     def test_default_tiles_are_seeded_in_storefront_order(self):
         tiles = list(HomepageTile.objects.values_list("key", flat=True))
-        self.assertEqual(tiles, ["women", "men", "kids"])
+        self.assertEqual(tiles, ["women", "men", "kids", "teens"])
 
     def test_public_list_only_returns_active_tiles(self):
         HomepageTile.objects.create(
@@ -33,7 +33,7 @@ class HomepageTileApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             [tile["key"] for tile in response.data],
-            ["women", "men", "kids"],
+            ["women", "men", "kids", "teens"],
         )
 
     def test_admin_can_create_update_list_and_delete_tiles(self):
