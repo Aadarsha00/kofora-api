@@ -55,6 +55,12 @@ jobs:
             "$VENV_DIR/bin/python" manage.py migrate --noinput
             "$VENV_DIR/bin/python" manage.py collectstatic --noinput
 
+            sudo cp deployment/systemd/kofora-gunicorn.service /etc/systemd/system/
+            sudo cp deployment/systemd/kofora-celery-worker.service /etc/systemd/system/
+            sudo cp deployment/systemd/kofora-celery-beat.service /etc/systemd/system/
+            sudo cp deployment/nginx/kofora_api.conf /etc/nginx/sites-available/kofora_api
+            sudo systemctl daemon-reload
+            sudo nginx -t
             sudo systemctl restart kofora-gunicorn
             sudo systemctl restart kofora-celery-worker
             sudo systemctl restart kofora-celery-beat
