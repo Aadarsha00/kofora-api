@@ -53,11 +53,19 @@ nano .env
 Set production values:
 
 - `DJANGO_DEBUG=False`
-- `DJANGO_ALLOWED_HOSTS=api.kofora.com`
+- `DJANGO_ALLOWED_HOSTS=2.25.209.49,127.0.0.1,localhost`
 - `DATABASE_URL=postgresql://...`
 - Redis/Celery URLs
+- `FRONTEND_BASE_URL=http://2.25.209.49:3000` if the frontend is also served by IP for now
+- `MEDIA_URL=http://2.25.209.49/media/`
+- `DJANGO_SECURE_SSL_REDIRECT=False`
+- `DJANGO_SESSION_COOKIE_SECURE=False`
+- `DJANGO_CSRF_COOKIE_SECURE=False`
+- `DJANGO_SECURE_HSTS_SECONDS=0`
 - Stripe/PayPal secrets
 - SMTP credentials
+
+When the domain and HTTPS certificate are ready, change the IP values to the domain values and set the secure flags back to `True`.
 
 ## 6. Django Setup
 
@@ -101,6 +109,8 @@ sudo systemctl reload nginx
 
 ## 9. HTTPS (Let's Encrypt)
 
+Skip this while deploying by bare IP. Let's Encrypt requires a real domain pointed at the VPS.
+
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d api.kofora.com
@@ -112,9 +122,18 @@ sudo certbot --nginx -d api.kofora.com
 - `sudo systemctl status kofora-gunicorn`
 - `sudo systemctl status kofora-celery-worker`
 - `sudo systemctl status kofora-celery-beat`
-- `curl https://api.kofora.com/api/v1/search/products/`
+- `curl http://2.25.209.49/api/v1/search/products/`
 
-## 11. Media Strategy (Local now, R2 ready later)
+## 11. GitHub Actions Secrets
+
+Set these repository secrets before using `.github/workflows/deploy.yml`:
+
+- `VPS_HOST=2.25.209.49`
+- `VPS_USER=<ssh-user>`
+- `VPS_SSH_KEY=<private-key-for-that-user>`
+- `VPS_DEPLOY_PATH=/var/www/kofora/backend`
+
+## 12. Media Strategy (Local now, R2 ready later)
 
 Current setup stores media at `/var/www/kofora/backend/media`.
 To migrate later to Cloudflare R2, replace Django storage backend and keep model schema unchanged.
