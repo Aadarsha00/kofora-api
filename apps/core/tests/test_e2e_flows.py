@@ -158,13 +158,21 @@ class E2ECheckoutLifecycleTests(APITestCase):
             is_active=True,
         )
 
-        shipping_zone = ShippingZone.objects.create(name="US", country_code="US")
-        self.shipping_method = ShippingMethod.objects.create(
-            zone=shipping_zone,
-            name="Standard",
+        shipping_zone, _ = ShippingZone.objects.get_or_create(
+            country_code="US",
+            state_code="",
+            defaults={"name": "US", "is_active": True},
+        )
+        self.shipping_method, _ = ShippingMethod.objects.update_or_create(
             code="standard-us",
-            base_rate=Decimal("5.00"),
-            is_active=True,
+            defaults={
+                "zone": shipping_zone,
+                "name": "Standard",
+                "base_rate": Decimal("5.00"),
+                "ups_service_code": "",
+                "free_shipping_threshold": None,
+                "is_active": True,
+            },
         )
 
         self.address = Address.objects.create(
